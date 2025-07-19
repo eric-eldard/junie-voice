@@ -5,12 +5,9 @@ import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import lombok.extern.slf4j.Slf4j;
-import org.commonmark.ext.gfm.tables.TablesExtension;
-import org.commonmark.node.Node;
-import org.commonmark.parser.Parser;
-import org.commonmark.renderer.html.HtmlRenderer;
 import org.jetbrains.annotations.NotNull;
 
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -19,7 +16,6 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPasswordField;
@@ -28,6 +24,7 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -41,21 +38,18 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
 
 import com.eric_eldard.ui.log.BaseLogPanel;
 import com.eric_eldard.ui.log.HtmlLogPanel;
 import com.eric_eldard.ui.log.LogEntry;
 import com.eric_eldard.ui.log.LogLevel;
 import com.eric_eldard.ui.log.TextLogPanel;
-import com.eric_eldard.ui.renderer.UnwrapParagraphRenderer;
 import com.eric_eldard.voice.OpenAIFilesService;
 import com.eric_eldard.voice.OpenAIResponsesService;
 import com.eric_eldard.voice.VoiceService;
@@ -114,13 +108,13 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
 
     // Speaker state tracking
     private boolean speakerMuted = false;
-    
+
     // Track AI response state for microphone muting
     private volatile boolean aiResponseActive = false;
-    
+
     // Track microphone state before AI response for proper restoration
     private volatile boolean micMutedBeforeAIResponse = false;
-    
+
     // Track if user has used push-to-interrupt (disregards original mic state)
     private volatile boolean userInterruptedAI = false;
 
@@ -336,10 +330,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
 
         // Right side button panel with new layout
         JBPanel buttonPanel2 = new JBPanel(new BorderLayout());
-        
+
         // Submit button on top, full width
         buttonPanel2.add(submitButton, BorderLayout.NORTH);
-        
+
         // Bottom row with upload (left) and paste (right) buttons
         JBPanel bottomButtonPanel = new JBPanel(new BorderLayout());
         bottomButtonPanel.add(uploadButton, BorderLayout.WEST);
@@ -497,9 +491,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
 
             // Create appropriate panel type based on message content
             BaseLogPanel logPanel;
-            if (isChatStyleMessage(message)) {
+            if (isChatStyleMessage(message))
+            {
                 logPanel = new HtmlLogPanel(entry, this);
-            } else {
+            }
+            else
+            {
                 logPanel = new TextLogPanel(entry, this);
             }
             logPanels.add(logPanel);
@@ -597,188 +594,6 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         return message.startsWith("USER_TRANSCRIPT:") || message.startsWith("AGENT_TRANSCRIPT:");
     }
 
-    public String convertToBasicHtml(String text)
-    {
-        if (text == null)
-        {
-            return "";
-        }
-
-        String html = text;
-
-        // Basic HTML escaping
-        html = html.replace("&", "&amp;");
-        html = html.replace("<", "&lt;");
-        html = html.replace(">", "&gt;");
-        html = html.replace("\"", "&quot;");
-
-        // Convert line breaks to HTML
-        html = html.replace("\n", "<br>");
-
-        return html;
-    }
-
-    private boolean startsWithBlockElement(String html)
-    {
-        if (html == null || html.trim().isEmpty())
-        {
-            return false;
-        }
-
-        String trimmedHtml = html.trim();
-
-        // Check for block-level elements that should start on a new line
-        return trimmedHtml.startsWith("<h1") ||
-            trimmedHtml.startsWith("<h2") ||
-            trimmedHtml.startsWith("<h3") ||
-            trimmedHtml.startsWith("<h4") ||
-            trimmedHtml.startsWith("<h5") ||
-            trimmedHtml.startsWith("<h6") ||
-            trimmedHtml.startsWith("<p") ||
-            trimmedHtml.startsWith("<ul") ||
-            trimmedHtml.startsWith("<ol") ||
-            trimmedHtml.startsWith("<pre") ||
-            trimmedHtml.startsWith("<table") ||
-            trimmedHtml.startsWith("<blockquote") ||
-            trimmedHtml.startsWith("<div");
-    }
-
-    private boolean isSimpleParagraph(String html)
-    {
-        if (html == null || html.trim().isEmpty())
-        {
-            return false;
-        }
-
-        String trimmedHtml = html.trim();
-
-        // Check if it's a simple paragraph: starts with <p> and ends with </p>
-        // and doesn't contain other block elements inside
-        if (trimmedHtml.startsWith("<p>") && trimmedHtml.endsWith("</p>"))
-        {
-            // Extract content between <p> and </p>
-            String content = trimmedHtml.substring(3, trimmedHtml.length() - 4);
-
-            // Check if the content contains any block-level elements
-            // If it contains other block elements, it's not a simple paragraph
-            return !content.contains("<h1") && !content.contains("<h2") && !content.contains("<h3") &&
-                !content.contains("<h4") && !content.contains("<h5") && !content.contains("<h6") &&
-                !content.contains("<ul") && !content.contains("<ol") && !content.contains("<li") &&
-                !content.contains("<pre") && !content.contains("<table") && !content.contains("<blockquote") &&
-                !content.contains("<div") && !content.contains("<p>");
-        }
-
-        return false;
-    }
-
-    public String convertMarkdownToHtml(String markdown)
-    {
-        if (markdown == null)
-        {
-            return "";
-        }
-
-        try
-        {
-            // Extract prefix and content
-            String prefix;
-            String content;
-
-            if (markdown.startsWith("USER_TRANSCRIPT:"))
-            {
-                prefix = "👤 User: ";
-                content = markdown.substring("USER_TRANSCRIPT:".length());
-            }
-            else if (markdown.startsWith("AGENT_TRANSCRIPT:"))
-            {
-                prefix = "🤖 Agent: ";
-                content = markdown.substring("AGENT_TRANSCRIPT:".length());
-            }
-            else
-            {
-                throw new IllegalArgumentException("Well then who is this from? [" + markdown + ']');
-            }
-
-            // Create parser with extensions with tables
-            Parser parser = Parser.builder()
-                .extensions(List.of(TablesExtension.create()))
-                .build();
-
-            // Create HTML renderer with custom styling
-            HtmlRenderer renderer = HtmlRenderer.builder()
-                .extensions(List.of(TablesExtension.create()))
-                .nodeRendererFactory(UnwrapParagraphRenderer::new)
-                .escapeHtml(true)
-                .build();
-
-            // Parse and render markdown to HTML
-            Node document = parser.parse(content);
-            String html = renderer.render(document);
-
-            // Special handling for transcribing placeholder - make it dimmer
-            if (content.trim().equals("_transcribing_"))
-            {
-                html = html.replaceAll("<p>_transcribing_</p>",
-                    "<p style='color: #888; font-style: italic;'>transcribing...</p>");
-            }
-
-            // Apply dark theme styling to code elements
-            html = html.replaceAll("<code>([^<]*)</code>",
-                """
-                <code style='background-color: #1a1a1a; color: #e8e8e8; padding: 2px 4px; border-radius: 3px;'>$1</code>
-                """.trim());
-
-            // Apply dark theme styling to code blocks
-            html = html.replaceAll("<pre><code>",
-                """
-                <pre style='background-color: #0d1117; color: #e6edf3; padding: 12px; border-radius: 6px; margin: 8px 0;
-                display: block; width: 100%; box-sizing: border-box; border: 1px solid #30363d;
-                font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-                font-size: 13px; line-height: 1.45; overflow-x: auto;'><code style='background: none;
-                padding: 0; border-radius: 0;'>
-                """.trim());
-
-            // Add styling to headers for consistent spacing
-            html = html.replaceAll("<h([1-6])>", "<h$1 style='margin: 8px 0 4px 0;'>");
-
-            // Add styling to lists for consistent spacing and proper display
-            html = html.replaceAll("<ul>", "<ul style='padding-left: 20px; display: block;'>");
-            html = html.replaceAll("<ol>", "<ol style='padding-left: 20px; display: block;'>");
-            html = html.replaceAll("<li>", "<li style='display: list-item;'>");
-
-            // Add styling to tables for better appearance
-            html = html.replaceAll("<table>",
-                "<table style='border-collapse: collapse; margin: 8px 0;'>");
-            html = html.replaceAll("<th>",
-                "<th style='border: 1px solid #666; padding: 4px 8px; background-color: #444; color: #fff;'>");
-            html = html.replaceAll("<td>",
-                "<td style='border: 1px solid #666; padding: 4px 8px;'>");
-
-            // Links will be handled by HyperlinkListener - no modification needed here
-
-            // Add prefix AFTER markdown processing
-            // Check if content starts with a block-level element
-            // Special case: if it's just a simple paragraph (CommonMark wraps plain text in <p> tags),
-            // treat it as inline content for chat messages
-            if (startsWithBlockElement(html) && !isSimpleParagraph(html))
-            {
-                // Block-level elements should start on a new line
-                return prefix + "<br>" + html;
-            }
-            else
-            {
-                // Inline content should continue on the same line as the prefix
-                return prefix + html;
-            }
-        }
-        catch (Exception e)
-        {
-            log.error("Failed to convert markdown to HTML", e);
-            // Fallback to basic HTML escaping if markdown parsing fails
-            return convertToBasicHtml(markdown);
-        }
-    }
-
     private void connectToOpenAI()
     {
         // First check if API key is available from environment variables
@@ -858,10 +673,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             String selectedVoice = (String) voiceComboBox.getSelectedItem();
             voiceService = new VoiceService(apiKey, selectedModel, selectedVoice);
             voiceService.setServiceListener(this);
-            
+
             // Initialize OpenAI Responses Service for code detection
             responsesService = new OpenAIResponsesService(apiKey);
-            
+
             // Initialize OpenAI Files Service for file uploads
             filesService = new OpenAIFilesService(apiKey);
 
@@ -900,7 +715,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             voiceService.shutdown();
             voiceService = null;
         }
-        
+
         responsesService = null;
         filesService = null;
 
@@ -931,21 +746,21 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         {
             // Allow starting voice session even during AI response (for interruption)
             voiceService.startVoiceSession();
-            
+
             // If we're interrupting an AI response, log it and mark as interrupted
             if (aiResponseActive)
             {
                 userInterruptedAI = true;
                 speakerMuted = true;
                 updateSpeakerButton();
-                
+
                 // Mute the output immediately when user starts talking after push-to-interrupt
                 if (voiceService != null && voiceService.getAudioService() != null && !voiceService.getAudioService().isAudioMuted())
                 {
                     voiceService.getAudioService().setAudioMuted(true);
                     addLogEntry(LogLevel.DEBUG, "🔇 Output muted during user interruption\n");
                 }
-                
+
                 addLogEntry(LogLevel.DEBUG, "🎤 User interrupted AI response\n");
             }
         }
@@ -995,7 +810,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
     private void copyLog()
     {
         StringBuilder logText = new StringBuilder();
-        
+
         synchronized (logEntries)
         {
             // Use the updated LogEntry message directly to get current content
@@ -1010,18 +825,18 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     {
                         // For transcript messages, remove HTML/markdown formatting
                         plainText = entry.message().replaceAll("<[^>]+>", "")
-                                                 .replace("&lt;", "<")
-                                                 .replace("&gt;", ">")
-                                                 .replace("&amp;", "&")
-                                                 .replace("&quot;", "\"")
-                                                 .replace("&#39;", "'");
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&amp;", "&")
+                            .replace("&quot;", "\"")
+                            .replace("&#39;", "'");
                     }
                     else
                     {
                         // For regular log messages, use as-is
                         plainText = entry.message();
                     }
-                    
+
                     logText.append(plainText);
                     if (!plainText.endsWith("\n"))
                     {
@@ -1030,15 +845,15 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 }
             }
         }
-        
+
         // Copy to clipboard
         if (logText.length() > 0)
         {
             try
             {
-                java.awt.datatransfer.StringSelection stringSelection = 
+                java.awt.datatransfer.StringSelection stringSelection =
                     new java.awt.datatransfer.StringSelection(logText.toString());
-                java.awt.datatransfer.Clipboard clipboard = 
+                java.awt.datatransfer.Clipboard clipboard =
                     java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
                 clipboard.setContents(stringSelection, null);
             }
@@ -1048,7 +863,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             }
         }
     }
-    
+
     private int countVisibleEntries()
     {
         int count = 0;
@@ -1097,20 +912,20 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         fileChooser.setMultiSelectionEnabled(true);
         fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
         fileChooser.setDialogTitle("Select image files to upload");
-        
+
         // Set up image file filter
         FileNameExtensionFilter imageFilter = new FileNameExtensionFilter(
-            "Image files (*.jpg, *.jpeg, *.png, *.gif, *.bmp, *.webp)", 
+            "Image files (*.jpg, *.jpeg, *.png, *.gif, *.bmp, *.webp)",
             "jpg", "jpeg", "png", "gif", "bmp", "webp");
         fileChooser.setFileFilter(imageFilter);
         fileChooser.setAcceptAllFileFilterUsed(false);
-        
+
         // Remember last accessed directory
         if (lastAccessedDirectory != null && lastAccessedDirectory.exists())
         {
             fileChooser.setCurrentDirectory(lastAccessedDirectory);
         }
-        
+
         int result = fileChooser.showOpenDialog(mainPanel);
         if (result == JFileChooser.APPROVE_OPTION)
         {
@@ -1133,17 +948,21 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         }
 
         addLogEntry(LogLevel.INFO, "Uploading " + files.length + " file(s)...");
-        
-        filesService.uploadFiles(files).thenAccept(response -> {
-            SwingUtilities.invokeLater(() -> {
+
+        filesService.uploadFiles(files).thenAccept(response ->
+        {
+            SwingUtilities.invokeLater(() ->
+            {
                 // Add the raw API response to DEBUG log as specified
                 addLogEntry(LogLevel.DEBUG, "OpenAI Files API Response:\n" + response);
-                
+
                 // Treat the response as user input and send to both voice and code agents
                 processFileUploadResponse(response);
             });
-        }).exceptionally(throwable -> {
-            SwingUtilities.invokeLater(() -> {
+        }).exceptionally(throwable ->
+        {
+            SwingUtilities.invokeLater(() ->
+            {
                 addLogEntry(LogLevel.DEBUG, "File upload failed: " + throwable.getMessage());
             });
             return null;
@@ -1154,24 +973,26 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
     {
         // Display the image analysis response as an agent message (not spoken aloud)
         addLogEntry(LogLevel.INFO, "AGENT_TRANSCRIPT:" + response + '\n');
-        
+
         // Inject the image analysis response into the voice session using conversation.item.create
         if (voiceService != null && voiceService.isConnected())
         {
             voiceService.injectAssistantMessage(response);
         }
-        
+
         // Send the response to the code agent (OpenAI Responses Service)
         if (responsesService != null)
         {
             // Collect recent transcript messages for context
             List<OpenAIResponsesService.TranscriptMessage> transcriptMessages = collectRecentTranscriptMessages(10);
-            
+
             // Add the file upload response as a user message
             transcriptMessages.add(new OpenAIResponsesService.TranscriptMessage("user", response));
-            
-            responsesService.analyzeForCodeRequest(transcriptMessages).thenAccept(codeResponse -> {
-                SwingUtilities.invokeLater(() -> {
+
+            responsesService.analyzeForCodeRequest(transcriptMessages).thenAccept(codeResponse ->
+            {
+                SwingUtilities.invokeLater(() ->
+                {
                     if (!"[non-code-request]".equals(codeResponse))
                     {
                         // Display code response as agent transcript
@@ -1194,13 +1015,13 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             // Get system clipboard
             Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
             Transferable transferable = clipboard.getContents(null);
-            
+
             if (transferable == null)
             {
                 addLogEntry(LogLevel.INFO, "No content found in clipboard");
                 return;
             }
-            
+
             // Check if clipboard contains image data
             if (transferable.isDataFlavorSupported(DataFlavor.imageFlavor))
             {
@@ -1210,10 +1031,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     addLogEntry(LogLevel.INFO, "Cannot paste image - not connected to OpenAI");
                     return;
                 }
-                
+
                 // Extract image from clipboard
                 Image image = (Image) transferable.getTransferData(DataFlavor.imageFlavor);
-                
+
                 // Convert to BufferedImage
                 BufferedImage bufferedImage;
                 if (image instanceof BufferedImage)
@@ -1224,22 +1045,22 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 {
                     // Convert Image to BufferedImage
                     bufferedImage = new BufferedImage(
-                        image.getWidth(null), 
-                        image.getHeight(null), 
+                        image.getWidth(null),
+                        image.getHeight(null),
                         BufferedImage.TYPE_INT_RGB
                     );
                     bufferedImage.getGraphics().drawImage(image, 0, 0, null);
                 }
-                
+
                 // Create temporary file
                 File tempFile = File.createTempFile("clipboard_image_", ".png");
                 tempFile.deleteOnExit(); // Clean up on JVM exit
-                
+
                 // Write image to temporary file
                 ImageIO.write(bufferedImage, "png", tempFile);
-                
+
                 addLogEntry(LogLevel.INFO, "Pasted image from clipboard");
-                
+
                 // Process through existing upload pipeline
                 uploadFiles(new File[]{tempFile});
             }
@@ -1258,7 +1079,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
     private void updateMicrophoneButton()
     {
         boolean isRecording = voiceService != null && voiceService.isRecording();
-        
+
         if (isRecording)
         {
             // Microphone is actively recording
@@ -1404,7 +1225,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             }
 
             updateMicrophoneButton();
-            
+
             // Reset streaming state when response is completed
             synchronized (logEntries)
             {
@@ -1466,7 +1287,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 if (!transcriptMessages.isEmpty())
                 {
                     responsesService.analyzeForCodeRequest(transcriptMessages)
-                        .thenAccept(result -> SwingUtilities.invokeLater(() -> {
+                        .thenAccept(result -> SwingUtilities.invokeLater(() ->
+                        {
                             if ("[non-code-request]".equals(result))
                             {
                                 // Log non-code requests to DEBUG
@@ -1484,9 +1306,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                                 addLogEntry(LogLevel.INFO, codeMessage);
                             }
                         }))
-                        .exceptionally(throwable -> {
+                        .exceptionally(throwable ->
+                        {
                             log.error("Error calling OpenAI Responses API", throwable);
-                            SwingUtilities.invokeLater(() -> 
+                            SwingUtilities.invokeLater(() ->
                                 addLogEntry(LogLevel.DEBUG, "❌ Error calling OpenAI Responses API\n"));
                             return null;
                         });
@@ -1743,13 +1566,14 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
 
     /**
      * Collects recent transcript messages for OpenAI Responses API analysis
+     *
      * @param maxMessages Maximum number of messages to collect (default 10)
      * @return List of transcript messages in chronological order
      */
     private List<OpenAIResponsesService.TranscriptMessage> collectRecentTranscriptMessages(int maxMessages)
     {
         List<OpenAIResponsesService.TranscriptMessage> transcriptMessages = new ArrayList<>();
-        
+
         synchronized (logEntries)
         {
             // Iterate through log entries in reverse order to get most recent first
@@ -1757,7 +1581,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             {
                 LogEntry entry = logEntries.get(i);
                 String message = entry.message();
-                
+
                 if (message.startsWith("USER_TRANSCRIPT:"))
                 {
                     String content = message.substring("USER_TRANSCRIPT:".length()).trim();
@@ -1774,7 +1598,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 }
             }
         }
-        
+
         return transcriptMessages;
     }
 

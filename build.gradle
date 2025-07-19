@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij.platform' version '2.0.1'
+    id 'org.jetbrains.intellij.platform' version '2.6.0'
     id 'io.freefair.lombok' version '8.4'
 }
 
@@ -9,43 +9,40 @@ version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
-
+    google()
+    maven { url = uri("https://www.jetbrains.com/intellij-repository/releases") }
+    maven { url = uri("https://cache-redirector.jetbrains.com/intellij-dependencies") }
     intellijPlatform {
         defaultRepositories()
     }
-
 }
 
 java {
     sourceCompatibility = JavaVersion.toVersion(providers.gradleProperty("pluginJavaVersion").get())
     targetCompatibility = JavaVersion.toVersion(providers.gradleProperty("pluginJavaVersion").get())
+
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(providers.gradleProperty("pluginJavaVersion").get())
+    }
 }
 
-// Configure IntelliJ Platform
 intellijPlatform {
     pluginConfiguration {
         version = providers.gradleProperty("pluginVersion")
         description = providers.gradleProperty("pluginDescription")
-
-        // Plugin will be compatible from IntelliJ IDEA 2024.1 to 2025.1.*
         ideaVersion {
-            sinceBuild = "241"
-            untilBuild = "251.*"
+            sinceBuild = "251"
+            untilBuild = "260.*"
         }
-
-        changeNotes = """
-        Initial release of Junie Voice Assistant plugin.
-        """
+        changeNotes = "Initial release."
     }
 }
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity("2024.1")
-
-        pluginVerifier()
-        zipSigner()
+        intellijIdeaUltimate(providers.gradleProperty("platformVersion").get())
         instrumentationTools()
+        pluginVerifier()
     }
 
     // Logging
@@ -70,9 +67,7 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 
-
-// Configure tasks
+// Compile encoding
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
-

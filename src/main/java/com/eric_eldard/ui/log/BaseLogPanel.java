@@ -42,8 +42,6 @@ public abstract class BaseLogPanel extends JBPanel
         return logEntry.level();
     }
 
-    public abstract String getTextContent();
-
     public void setLogVisible(boolean visible)
     {
         SwingUtilities.invokeLater(() ->
@@ -72,7 +70,5 @@ public abstract class BaseLogPanel extends JBPanel
     {
         boolean shouldShowLogLevel(LogLevel level);
         boolean isChatStyleMessage(String message);
-        String convertMarkdownToHtml(String message);
-        String convertToBasicHtml(String message);
     }
 }
