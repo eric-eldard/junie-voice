@@ -1,7 +1,6 @@
 package com.eric_eldard.voice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -13,7 +12,6 @@ import okhttp3.WebSocketListener;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -51,7 +49,7 @@ public class OpenAIRealtimeService
     private volatile long lastApiCallTime = 0; // For rate limiting
 
     private static final long MIN_API_CALL_INTERVAL_MS = 500;
-        // Increased to 500ms between API calls for better rate limiting
+    // Increased to 500ms between API calls for better rate limiting
 
     private volatile long backoffDelayMs = MIN_API_CALL_INTERVAL_MS; // Exponential backoff delay
 
@@ -216,7 +214,7 @@ public class OpenAIRealtimeService
                 4. Confirm that you have completed the search/scrape and delivered the information.
                 Make sure to respond promptly after the search/scrape is complete without waiting for additional input.
                 """;
-            
+
             session.put("instructions", instructions);
             session.put("voice", voice);
             session.put("input_audio_format", "pcm16");
@@ -226,7 +224,7 @@ public class OpenAIRealtimeService
             turnDetection.put("type", "server_vad");
             turnDetection.put("silence_duration_ms", 1000);
             session.put("turn_detection", turnDetection);
-            
+
             session.set("tools", objectMapper.createArrayNode());
             session.put("temperature", 0.8);
             session.put("max_response_output_tokens", 4096);
@@ -353,7 +351,7 @@ public class OpenAIRealtimeService
                     eventListener.onTraceMessage(
                         "Audio Data: Failed to send audio data: " + e.getMessage() + " [ERROR]");
                 }
-                
+
                 // Increase backoff delay on failure to prevent rapid retries
                 increaseBackoff();
             }

@@ -61,7 +61,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
         }
 
         audioService.startRecording();
-        
+
         // If we're starting during an AI response, this is an interruption
         if (audioResponseActive)
         {
@@ -244,7 +244,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
     {
         // Always send audio data to OpenAI when available - this enables interruption
         // The AudioService will only call this when microphone is actively recording
-        
+
         // Send audio data to OpenAI with reduced logging frequency for performance
         if (audioData.length > 0 && audioData.length % 51200 == 0)
         { // Log every ~50KB for better performance

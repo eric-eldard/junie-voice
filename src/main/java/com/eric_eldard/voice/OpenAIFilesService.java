@@ -27,11 +27,11 @@ public class OpenAIFilesService
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String MODEL = "gpt-4.1-mini";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    
+
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
-    
+
     public OpenAIFilesService(String apiKey)
     {
         this.apiKey = apiKey;
@@ -42,17 +42,19 @@ public class OpenAIFilesService
             .writeTimeout(120, TimeUnit.SECONDS)
             .build();
     }
-    
+
     /**
      * Analyzes multiple image files using OpenAI's Chat Completions API
+     *
      * @param files Array of image files to analyze
      * @return CompletableFuture that resolves to the API response as a string
      */
     public CompletableFuture<String> uploadFiles(File[] files)
     {
-        return CompletableFuture.supplyAsync(() -> {
+        return CompletableFuture.supplyAsync(() ->
+        {
             StringBuilder responseBuilder = new StringBuilder();
-            
+
             for (File file : files)
             {
                 try
@@ -75,52 +77,59 @@ public class OpenAIFilesService
                     responseBuilder.append("Error analyzing ").append(file.getName()).append(": ").append(e.getMessage());
                 }
             }
-            
+
             return responseBuilder.toString().trim();
         });
     }
-    
+
     private String analyzeImage(File imageFile) throws IOException
     {
         // Convert image to base64
         byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
         String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-        
+
         // Determine MIME type based on file extension
         String fileName = imageFile.getName().toLowerCase();
         String mimeType = "image/jpeg"; // default
-        if (fileName.endsWith(".png")) {
+        if (fileName.endsWith(".png"))
+        {
             mimeType = "image/png";
-        } else if (fileName.endsWith(".gif")) {
+        }
+        else if (fileName.endsWith(".gif"))
+        {
             mimeType = "image/gif";
-        } else if (fileName.endsWith(".bmp")) {
+        }
+        else if (fileName.endsWith(".bmp"))
+        {
             mimeType = "image/bmp";
-        } else if (fileName.endsWith(".webp")) {
+        }
+        else if (fileName.endsWith(".webp"))
+        {
             mimeType = "image/webp";
         }
-        
+
         // Create request body for Chat Completions API
         ObjectNode requestBody = createImageAnalysisRequest(base64Image, mimeType);
         String jsonRequest = objectMapper.writeValueAsString(requestBody);
-        
+
         Request request = new Request.Builder()
             .url(OPENAI_API_URL)
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/json")
             .post(RequestBody.create(jsonRequest, JSON))
             .build();
-        
+
         try (Response response = httpClient.newCall(request).execute())
         {
             String responseBody = response.body() != null ? response.body().string() : "";
-            
+
             if (!response.isSuccessful())
             {
-                log.error("OpenAI Chat Completions API call failed with status: {}, body: {}", 
+                log.error("OpenAI Chat Completions API call failed with status: {}, body: {}",
                     response.code(), responseBody);
                 return "Image analysis failed with status: " + response.code() + "\nError: " + responseBody;
             }
-            
+
             // Parse the response to extract the image description
             try
             {
@@ -141,7 +150,7 @@ public class OpenAIFilesService
                         }
                     }
                 }
-                
+
                 log.warn("Unexpected response format from OpenAI API: {}", responseBody);
                 return "Could not analyze image - unexpected response format";
             }
@@ -152,28 +161,28 @@ public class OpenAIFilesService
             }
         }
     }
-    
+
     private ObjectNode createImageAnalysisRequest(String base64Image, String mimeType)
     {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", MODEL);
         requestBody.put("max_tokens", 1000);
         requestBody.put("temperature", 0.1);
-        
+
         ArrayNode messages = objectMapper.createArrayNode();
-        
+
         // Add user message with image
         ObjectNode userMessage = objectMapper.createObjectNode();
         userMessage.put("role", "user");
-        
+
         ArrayNode content = objectMapper.createArrayNode();
-        
+
         // Add text part
         ObjectNode textPart = objectMapper.createObjectNode();
         textPart.put("type", "text");
         textPart.put("text", "Please describe what you see in this image in detail.");
         content.add(textPart);
-        
+
         // Add image part
         ObjectNode imagePart = objectMapper.createObjectNode();
         imagePart.put("type", "image_url");
@@ -181,10 +190,10 @@ public class OpenAIFilesService
         imageUrl.put("url", "data:" + mimeType + ";base64," + base64Image);
         imagePart.set("image_url", imageUrl);
         content.add(imagePart);
-        
+
         userMessage.set("content", content);
         messages.add(userMessage);
-        
+
         requestBody.set("messages", messages);
         return requestBody;
     }
