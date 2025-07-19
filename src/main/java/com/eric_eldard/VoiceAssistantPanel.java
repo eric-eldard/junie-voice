@@ -58,7 +58,7 @@ import com.eric_eldard.voice.VoiceService;
  * Panel component for the Voice Assistant tool window
  */
 @Slf4j
-public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, BaseLogPanel.LogPanelDependencies
+public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 {
     // Message prefix constants
     public static final String USER_PREFIX = "👤 User: ";
@@ -492,16 +492,17 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         {
             LogEntry entry = new LogEntry(level, message);
             logEntries.add(entry);
+            boolean visible = shouldShowLogLevel(level);
 
             // Create appropriate panel type based on message content
             BaseLogPanel logPanel;
             if (isChatStyleMessage(message))
             {
-                logPanel = new HtmlLogPanel(entry, this);
+                logPanel = new HtmlLogPanel(entry, visible);
             }
             else
             {
-                logPanel = new TextLogPanel(entry, this);
+                logPanel = new TextLogPanel(entry, visible);
             }
             logPanels.add(logPanel);
 
@@ -1410,9 +1411,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     LogEntry streamingEntry = new LogEntry(LogLevel.INFO, AGENT_PREFIX + delta);
                     logEntries.add(streamingEntry);
                     currentStreamingLogIndex = logEntries.size() - 1;
+                    boolean visible = shouldShowLogLevel(streamingEntry.level());
 
                     // Create HtmlLogPanel for this transcript entry
-                    BaseLogPanel logPanel = new HtmlLogPanel(streamingEntry, this);
+                    BaseLogPanel logPanel = new HtmlLogPanel(streamingEntry, visible);
                     logPanels.add(logPanel);
 
                     // Add to container on EDT (insert before the glue component)
@@ -1498,9 +1500,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     logEntries.add(placeholderEntry);
                     userPlaceholderLogIndex = logEntries.size() - 1;
                     waitingForUserTranscript = true;
+                    boolean visible = shouldShowLogLevel(placeholderEntry.level());
 
                     // Create HtmlLogPanel for this placeholder entry (will become transcript)
-                    BaseLogPanel logPanel = new HtmlLogPanel(placeholderEntry, this);
+                    BaseLogPanel logPanel = new HtmlLogPanel(placeholderEntry, visible);
                     logPanels.add(logPanel);
 
                     // Add to container on EDT (insert before the glue component)

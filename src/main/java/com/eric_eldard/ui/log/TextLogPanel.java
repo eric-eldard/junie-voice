@@ -14,9 +14,9 @@ public class TextLogPanel extends BaseLogPanel
 {
     private final JLabel textLabel;
 
-    public TextLogPanel(LogEntry logEntry, LogPanelDependencies dependencies)
+    public TextLogPanel(LogEntry logEntry,  boolean visible)
     {
-        super(logEntry, dependencies);
+        super(logEntry, visible);
 
         // Use JLabel with plain text for non-transcript messages
         textLabel = new JLabel();
@@ -55,16 +55,5 @@ public class TextLogPanel extends BaseLogPanel
                        plainText.replace("\n", "<br>") + "</body></html>";
             textLabel.setText(plainText);
         });
-    }
-
-    public String getTextContent()
-    {
-        return extractTextFromPlainMessage(logEntry.message());
-    }
-
-    private String extractTextFromPlainMessage(String message)
-    {
-        // For plain messages, just return the message as-is
-        return message;
     }
 }

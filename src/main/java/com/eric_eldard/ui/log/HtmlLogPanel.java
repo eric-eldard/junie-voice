@@ -27,9 +27,9 @@ public class HtmlLogPanel extends BaseLogPanel
 {
     private final JTextPane editorPane;
 
-    public HtmlLogPanel(LogEntry logEntry, LogPanelDependencies dependencies)
+    public HtmlLogPanel(LogEntry logEntry, boolean visible)
     {
-        super(logEntry, dependencies);
+        super(logEntry, visible);
 
         // Use JTextPane with HTML for transcript messages
         editorPane = new JTextPane()
