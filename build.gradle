@@ -1,0 +1,78 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij.platform' version '2.0.1'
+    id 'io.freefair.lombok' version '8.4'
+}
+
+group = 'com.eric_eldard'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+
+    intellijPlatform {
+        defaultRepositories()
+    }
+
+}
+
+java {
+    sourceCompatibility = JavaVersion.toVersion(providers.gradleProperty("pluginJavaVersion").get())
+    targetCompatibility = JavaVersion.toVersion(providers.gradleProperty("pluginJavaVersion").get())
+}
+
+// Configure IntelliJ Platform
+intellijPlatform {
+    pluginConfiguration {
+        version = providers.gradleProperty("pluginVersion")
+        description = providers.gradleProperty("pluginDescription")
+
+        // Plugin will be compatible from IntelliJ IDEA 2024.1 to 2025.1.*
+        ideaVersion {
+            sinceBuild = "241"
+            untilBuild = "251.*"
+        }
+
+        changeNotes = """
+        Initial release of Junie Voice Assistant plugin.
+        """
+    }
+}
+
+dependencies {
+    intellijPlatform {
+        intellijIdeaCommunity("2024.1")
+
+        pluginVerifier()
+        zipSigner()
+        instrumentationTools()
+    }
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:1.7.10'
+    implementation 'ch.qos.logback:logback-core:1.1.2'
+    implementation 'ch.qos.logback:logback-classic:1.1.2'
+
+    // WebSocket client for OpenAI Realtime API
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+
+    // JSON processing
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+
+    // Markdown processing
+    implementation 'org.commonmark:commonmark:0.25.0'
+    implementation 'org.commonmark:commonmark-ext-gfm-tables:0.25.0'
+
+    // Audio processing - using Java Sound API only
+
+    // Test dependencies
+    testImplementation 'junit:junit:4.13.2'
+}
+
+
+// Configure tasks
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+

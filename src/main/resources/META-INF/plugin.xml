@@ -1,0 +1,29 @@
+<idea-plugin version="2">
+    <id>${project.artifactId}</id>
+    <name>${project.name}</name>
+    <version>${project.version}</version>
+    <vendor email="${organization.email}" url="${organization.url}">${organization.name}</vendor>
+    <idea-version since-build="241" until-build="251.*"/>
+
+    <description>
+    <![CDATA[
+      Junie Voice Assistant - An IntelliJ plugin that provides voice interaction capabilities using OpenAI's Realtime API.
+      Features include microphone input, real-time voice processing, and audio output for AI responses.
+    ]]>
+    </description>
+
+    <change-notes>
+    <![CDATA[
+      No changes.
+    ]]>
+    </change-notes>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Voice Assistant"
+                    displayName="Junie Voice" 
+                    anchor="right" 
+                    factoryClass="com.eric_eldard.VoiceAssistantToolWindowFactory"
+                    canCloseContents="false"/>
+    </extensions>
+
+</idea-plugin>
