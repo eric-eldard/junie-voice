@@ -60,6 +60,10 @@ import com.eric_eldard.voice.VoiceService;
 @Slf4j
 public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, BaseLogPanel.LogPanelDependencies
 {
+    // Message prefix constants
+    public static final String USER_PREFIX = "👤 User: ";
+    public static final String AGENT_PREFIX = "🤖 Agent: ";
+
     private JBPanel mainPanel;
 
     private JButton connectButton;
@@ -534,8 +538,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 logContainer.revalidate();
                 logContainer.repaint();
 
-                // Only scroll to bottom if already at bottom
-                scrollToBottomIfNeeded();
+                // Always scroll to bottom when changing log views
+                scrollToBottom();
             }
         });
     }
@@ -583,6 +587,15 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         });
     }
 
+    private void scrollToBottom()
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            JScrollBar verticalScrollBar = logScrollPane.getVerticalScrollBar();
+            verticalScrollBar.setValue(verticalScrollBar.getMaximum());
+        });
+    }
+
     public boolean isChatStyleMessage(String message)
     {
         if (message == null)
@@ -590,8 +603,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
             return false;
         }
 
-        // Chat-style messages are user and agent transcripts (now identified by prefixes)
-        return message.startsWith("USER_TRANSCRIPT:") || message.startsWith("AGENT_TRANSCRIPT:");
+        // Chat-style messages are user and agent transcripts (now identified by emoji prefixes)
+        return message.startsWith(USER_PREFIX) || message.startsWith(AGENT_PREFIX);
     }
 
     private void connectToOpenAI()
@@ -798,7 +811,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         }
 
         // Add the user's message to the log
-        addLogEntry(LogLevel.INFO, "USER_TRANSCRIPT:" + text + '\n');
+        addLogEntry(LogLevel.INFO, USER_PREFIX + text + '\n');
 
         // Send the text message to the voice service
         voiceService.sendTextMessage(text);
@@ -972,7 +985,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
     private void processFileUploadResponse(String response)
     {
         // Display the image analysis response as an agent message (not spoken aloud)
-        addLogEntry(LogLevel.INFO, "AGENT_TRANSCRIPT:" + response + '\n');
+        addLogEntry(LogLevel.INFO, AGENT_PREFIX + response + '\n');
 
         // Inject the image analysis response into the voice session using conversation.item.create
         if (voiceService != null && voiceService.isConnected())
@@ -1250,7 +1263,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 log.debug("onUserTranscript: waitingForUserTranscript={}, userPlaceholderLogIndex={}, logEntries.size()={}",
                     waitingForUserTranscript, userPlaceholderLogIndex, logEntries.size());
 
-                String userMessage = "USER_TRANSCRIPT:" + transcript + '\n';
+                String userMessage = USER_PREFIX + transcript + '\n';
                 if (waitingForUserTranscript && userPlaceholderLogIndex >= 0 &&
                     userPlaceholderLogIndex < logEntries.size() && userPlaceholderLogIndex < logPanels.size())
                 {
@@ -1302,7 +1315,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                             else
                             {
                                 // Append code response to the log as a new message from the agent
-                                String codeMessage = "AGENT_TRANSCRIPT:" + result + '\n';
+                                String codeMessage = AGENT_PREFIX + result + '\n';
                                 addLogEntry(LogLevel.INFO, codeMessage);
                             }
                         }))
@@ -1325,7 +1338,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
         {
             synchronized (logEntries)
             {
-                String agentMessage = "AGENT_TRANSCRIPT:" + transcript + '\n';
+                String agentMessage = AGENT_PREFIX + transcript + '\n';
                 if (isStreamingActive && currentStreamingLogIndex >= 0 &&
                     currentStreamingLogIndex < logEntries.size() && currentStreamingLogIndex < logPanels.size())
                 {
@@ -1394,7 +1407,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     currentStreamingMessage.append(delta);
 
                     // Add initial log entry for streaming message
-                    LogEntry streamingEntry = new LogEntry(LogLevel.INFO, "AGENT_TRANSCRIPT:" + delta);
+                    LogEntry streamingEntry = new LogEntry(LogLevel.INFO, AGENT_PREFIX + delta);
                     logEntries.add(streamingEntry);
                     currentStreamingLogIndex = logEntries.size() - 1;
 
@@ -1426,12 +1439,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     {
                         LogEntry existingEntry = logEntries.get(currentStreamingLogIndex);
                         LogEntry updatedEntry = new LogEntry(existingEntry.level(),
-                            "AGENT_TRANSCRIPT:" + currentStreamingMessage);
+                            AGENT_PREFIX + currentStreamingMessage);
                         logEntries.set(currentStreamingLogIndex, updatedEntry);
 
                         // Update the corresponding LogPanel
                         BaseLogPanel logPanel = logPanels.get(currentStreamingLogIndex);
-                        logPanel.updateContent("AGENT_TRANSCRIPT:" + currentStreamingMessage);
+                        logPanel.updateContent(AGENT_PREFIX + currentStreamingMessage);
                     }
                 }
             }
@@ -1481,7 +1494,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                     userPlaceholderLogIndex = -1;
 
                     // Add placeholder log entry for user transcript
-                    LogEntry placeholderEntry = new LogEntry(LogLevel.INFO, "USER_TRANSCRIPT:_transcribing_\n");
+                    LogEntry placeholderEntry = new LogEntry(LogLevel.INFO, USER_PREFIX + "_transcribing_\n");
                     logEntries.add(placeholderEntry);
                     userPlaceholderLogIndex = logEntries.size() - 1;
                     waitingForUserTranscript = true;
@@ -1582,18 +1595,18 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener, B
                 LogEntry entry = logEntries.get(i);
                 String message = entry.message();
 
-                if (message.startsWith("USER_TRANSCRIPT:"))
+                if (message.startsWith(USER_PREFIX))
                 {
-                    String content = message.substring("USER_TRANSCRIPT:".length()).trim();
+                    String content = message.substring(USER_PREFIX.length()).trim();
                     // Skip placeholder messages
                     if (!content.equals("_transcribing_"))
                     {
                         transcriptMessages.add(0, new OpenAIResponsesService.TranscriptMessage("user", content));
                     }
                 }
-                else if (message.startsWith("AGENT_TRANSCRIPT:"))
+                else if (message.startsWith(AGENT_PREFIX))
                 {
-                    String content = message.substring("AGENT_TRANSCRIPT:".length()).trim();
+                    String content = message.substring(AGENT_PREFIX.length()).trim();
                     transcriptMessages.add(0, new OpenAIResponsesService.TranscriptMessage("assistant", content));
                 }
             }

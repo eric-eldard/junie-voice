@@ -16,6 +16,7 @@ import java.awt.Desktop;
 import java.awt.Insets;
 import java.util.List;
 
+import com.eric_eldard.VoiceAssistantPanel;
 import com.eric_eldard.ui.renderer.UnwrapParagraphRenderer;
 
 /**
@@ -71,9 +72,13 @@ public class HtmlLogPanel extends BaseLogPanel
 
     public void updateContent()
     {
+        updateContent(logEntry.message());
+    }
+
+    public void updateContent(String message)
+    {
         SwingUtilities.invokeLater(() ->
         {
-            // For transcript messages, use HTML rendering
             String html = """
                 <html>
                     <body style='font-family: monospace; font-size: 9px; margin: 0; padding: 0;
@@ -81,34 +86,12 @@ public class HtmlLogPanel extends BaseLogPanel
                     text-align: left; vertical-align: top; line-height: 1.2; width: 100%;
                     max-width: 100%; box-sizing: border-box; color: #ffffff;'>
                 """
-                + convertMarkdownToHtml(logEntry.message()) +
+                + convertMarkdownToHtml(message) +
                 """
                     </body>
                 </html>
                 """;
             editorPane.setText(html);
-        });
-    }
-
-    public void updateContent(String newMessage)
-    {
-        SwingUtilities.invokeLater(() ->
-        {
-            // For transcript messages, use HTML rendering
-            String html = convertMarkdownToHtml(newMessage);
-            String fullHtml = """
-                <html>
-                    <body style='font-family: monospace; font-size: 9px; margin: 0; padding: 0;
-                    word-wrap: break-word; white-space: pre-wrap; overflow-wrap: break-word;
-                    text-align: left; vertical-align: top; line-height: 1.2; width: 100%;
-                    max-width: 100%; box-sizing: border-box; color: #ffffff;'>
-                """
-                + html +
-                """
-                    </body>
-                </html>
-                """;
-            editorPane.setText(fullHtml);
         });
     }
 
@@ -121,19 +104,19 @@ public class HtmlLogPanel extends BaseLogPanel
 
         try
         {
-            // Extract prefix and content
+            // Extract prefix and content from messages that already have emoji prefixes
             String prefix;
             String content;
 
-            if (markdown.startsWith("USER_TRANSCRIPT:"))
+            if (markdown.startsWith(VoiceAssistantPanel.USER_PREFIX))
             {
-                prefix = "👤 User: ";
-                content = markdown.substring("USER_TRANSCRIPT:".length());
+                prefix = VoiceAssistantPanel.USER_PREFIX;
+                content = markdown.substring(VoiceAssistantPanel.USER_PREFIX.length());
             }
-            else if (markdown.startsWith("AGENT_TRANSCRIPT:"))
+            else if (markdown.startsWith(VoiceAssistantPanel.AGENT_PREFIX))
             {
-                prefix = "🤖 Agent: ";
-                content = markdown.substring("AGENT_TRANSCRIPT:".length());
+                prefix = VoiceAssistantPanel.AGENT_PREFIX;
+                content = markdown.substring(VoiceAssistantPanel.AGENT_PREFIX.length());
             }
             else
             {

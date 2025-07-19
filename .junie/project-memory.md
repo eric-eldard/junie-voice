@@ -280,3 +280,48 @@ The project now implements microphone muting during AI responses to prevent feed
   - **Result**: Microphone now correctly returns to whatever state it was in before agent started talking
 - ✅ **Robust State Management**: All fixes ensure consistent behavior across all user interaction scenarios
 - ✅ **Testing Verified**: All existing tests continue to pass, confirming no regressions introduced
+
+## Message Prefix Standardization
+
+### Current Status: EMOJI PREFIX CONSTANTS IMPLEMENTED
+The project now uses standardized emoji prefix constants for user and agent messages, eliminating the previous conversion system from "USER_TRANSCRIPT:" and "AGENT_TRANSCRIPT:" prefixes.
+
+### Technical Implementation
+- ✅ **Constants Added**: Added `USER_PREFIX = "👤 User: "` and `AGENT_PREFIX = "🤖 Agent: "` constants to VoiceAssistantPanel class
+- ✅ **Message Creation Updated**: All message creation code now uses the emoji prefix constants directly:
+  - `submitTextMessage()` method for text input messages
+  - `onUserTranscript()` method for voice transcript messages
+  - `onAgentTranscript()` method for agent response messages
+  - Placeholder creation for "_transcribing_" messages
+  - Code agent response messages
+- ✅ **Detection Logic Updated**: Updated `isChatStyleMessage()` and `collectRecentTranscriptMessages()` methods to detect messages by emoji prefixes
+- ✅ **HtmlLogPanel Refactored**: Removed conversion logic from HtmlLogPanel - now expects and handles messages with emoji prefixes directly
+- ✅ **Consistent Usage**: All transcript messages now use emoji prefixes throughout the entire message lifecycle
+
+### Benefits Achieved
+- ✅ **Simplified Architecture**: Eliminated unnecessary conversion between different prefix formats
+- ✅ **Consistent Message Format**: All messages use the same emoji prefix format from creation to display
+- ✅ **Improved Maintainability**: Centralized prefix definitions in constants reduce duplication and potential inconsistencies
+- ✅ **No Functional Regressions**: All existing tests pass, confirming functionality is preserved
+- ✅ **Clean Code**: Removed complex conversion logic in favor of direct prefix usage
+
+## Log View Auto-Scroll Enhancement
+
+### Current Status: ALWAYS SCROLL TO BOTTOM ON LOG VIEW CHANGES
+The project now automatically scrolls to the bottom of the log view whenever the user changes log levels, improving user experience by ensuring they always see the most recent relevant messages.
+
+### Technical Implementation
+- ✅ **New Scroll Method**: Added `scrollToBottom()` method that unconditionally scrolls to the bottom of the log view
+- ✅ **Enhanced refreshLogDisplay()**: Modified `refreshLogDisplay()` method to call `scrollToBottom()` instead of `scrollToBottomIfNeeded()`
+- ✅ **Preserved Existing Behavior**: Kept `scrollToBottomIfNeeded()` method for use in other contexts where conditional scrolling is appropriate
+- ✅ **Log Level Change Integration**: Auto-scroll triggers when user changes log level via dropdown (lines 418-419 in VoiceAssistantPanel)
+
+### User Experience Improvements
+- ✅ **Consistent Behavior**: Users always see the bottom of the log when switching between log levels (INFO, DEBUG, TRACE)
+- ✅ **No Manual Scrolling Required**: Eliminates need for users to manually scroll down after changing log views
+- ✅ **Preserved Context**: New messages still use conditional scrolling to avoid interrupting users reading older messages
+
+### Testing Coverage
+- ✅ **Build Verification**: Project builds successfully without compilation errors
+- ✅ **Regression Testing**: All existing VoiceAssistantPanel tests continue to pass (3/3)
+- ✅ **No Functional Impact**: Change only affects scrolling behavior during log view changes
