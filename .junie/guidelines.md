@@ -46,8 +46,9 @@ When asked to perform code cleanup, do the following:
 5. Remove tests for any methods or classes that were removed
 6. Remove temporary tests you created during development
 7. Remove temporary Markdown files you created
-8. Remove TODOs for complete items
-9. Compact your project-memory, where appropriate
+8. Remove unused dependencies
+9. Remove TODOs for complete items
+10. Compact your project-memory, where appropriate
 
 Respect the order of these removals; the order is designed for efficiency.
 Examples
