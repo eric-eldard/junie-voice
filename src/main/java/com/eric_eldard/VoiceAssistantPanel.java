@@ -24,7 +24,9 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.plaf.basic.BasicProgressBarUI;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -224,11 +226,15 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         // Volume meter
         JLabel volumeLabel = new JLabel("Mic Volume:");
+        UIManager.put("ProgressBar.selectionForeground",Color.WHITE);
+        UIManager.put("ProgressBar.selectionBackground",Color.GRAY);
         volumeMeter = new JProgressBar(0, 100);
+        volumeMeter.setUI(new BasicProgressBarUI());
         volumeMeter.setStringPainted(true);
         volumeMeter.setString("0%");
         volumeMeter.setValue(0);
-        volumeMeter.setForeground(Color.GREEN);
+        volumeMeter.setForeground(Color.GRAY);
+        volumeMeter.setBackground(Color.DARK_GRAY);
         volumeMeter.setPreferredSize(new Dimension(100, 20));
 
         // Log level dropdown
@@ -1227,18 +1233,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
                     // Mic was recording before AI started - restore it to recording state
                     voiceService.startVoiceSession();
                 }
-                // If micMutedBeforeAIResponse is true, mic was muted before AI started
-                // Since VoiceService stops recording during AI response, mic is already in correct muted state
-                // No action needed for muted state restoration
+                else
+                {
+                    updateMicrophoneButton();
+                }
             }
 
-            // Ensure microphone button is enabled when connected and initialized
-            if (initialized && voiceService != null && voiceService.isConnected())
-            {
-                micToggleButton.setEnabled(true);
-            }
-
-            updateMicrophoneButton();
 
             // Reset streaming state when response is completed
             synchronized (logEntries)
