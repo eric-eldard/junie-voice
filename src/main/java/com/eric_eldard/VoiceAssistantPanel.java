@@ -1,5 +1,8 @@
 package com.eric_eldard;
 
+import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.openapi.extensions.PluginDescriptor;
+import com.intellij.openapi.extensions.PluginId;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
@@ -108,21 +111,21 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
     private OpenAIFilesService filesService;
 
-    private boolean initialized = false;
+    private boolean initialized;
 
     private ScheduledExecutorService volumeUpdateExecutor;
 
-    // Speaker state tracking
-    private boolean speakerMuted = false;
-
     // Track AI response state for microphone muting
-    private volatile boolean aiResponseActive = false;
+    private volatile boolean aiResponseActive;
 
     // Track microphone state before AI response for proper restoration
-    private volatile boolean micMutedBeforeAIResponse = false;
+    private volatile boolean micMutedBeforeAiResponse;
+
+    // Track speaker state before AI response for proper restoration (most relevant when speaker auto-muted on interrupt)
+    private volatile boolean speakerMutedBeforeAiResponse;
 
     // Track if user has used push-to-interrupt (disregards original mic state)
-    private volatile boolean userInterruptedAI = false;
+    private volatile boolean userInterruptedAI;
 
     // Log storage and filtering
     private final List<LogEntry> logEntries = new ArrayList<>();
@@ -133,15 +136,15 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
     // Streaming text state
     private final StringBuilder currentStreamingMessage = new StringBuilder();
-    private boolean isStreamingActive = false;
+    private boolean isStreamingActive;
     private int currentStreamingLogIndex = -1;
 
     // User transcript placeholder state
-    private boolean waitingForUserTranscript = false;
+    private boolean waitingForUserTranscript;
     private int userPlaceholderLogIndex = -1;
 
     // File dialog folder memory
-    private static java.io.File lastAccessedDirectory = null;
+    private static java.io.File lastAccessedDirectory;
 
     public VoiceAssistantPanel()
     {
@@ -217,12 +220,13 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         // Control panel with microphone toggle and other controls
         JBPanel controlPanel = new JBPanel(new BorderLayout());
 
-        micToggleButton = new JToggleButton("🎤🚫");
-        micToggleButton.setEnabled(false); // Muted by default
+        micToggleButton = new JToggleButton();
+        micToggleButton.setEnabled(false);
+        updateMicrophoneButton();
 
-        speakerToggleButton = new JToggleButton("🔊");
-        speakerToggleButton.setEnabled(true); // Not muted by default
-        speakerToggleButton.setSelected(false);
+        speakerToggleButton = new JToggleButton();
+        speakerToggleButton.setEnabled(true);
+        updateSpeakerButton(false);
 
         // Volume meter
         JLabel volumeLabel = new JLabel("Mic Volume:");
@@ -359,6 +363,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         centerPanel.add(logPanel, BorderLayout.CENTER);
         mainPanel.add(centerPanel, BorderLayout.CENTER);
+
+        logPluginInfo();
     }
 
     private void setupEventHandlers()
@@ -771,8 +777,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
             if (aiResponseActive)
             {
                 userInterruptedAI = true;
-                speakerMuted = true;
-                updateSpeakerButton();
+                updateSpeakerButton(true);
 
                 // Mute the output immediately when user starts talking after push-to-interrupt
                 if (voiceService != null && voiceService.getAudioService() != null && !voiceService.getAudioService().isAudioMuted())
@@ -788,19 +793,17 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
     private void toggleSpeaker()
     {
+        boolean isMuted = true;
+
         if (voiceService != null && voiceService.getAudioService() != null)
         {
             voiceService.getAudioService().toggleAudioMute();
-            speakerMuted = voiceService.getAudioService().isAudioMuted();
-        }
-        else
-        {
-            speakerMuted = true;
+            isMuted = voiceService.getAudioService().isAudioMuted();
         }
 
-        updateSpeakerButton();
+        updateSpeakerButton(isMuted);
 
-        String status = speakerMuted ? "muted" : "unmuted";
+        String status = isMuted ? "muted" : "unmuted";
         addLogEntry(LogLevel.DEBUG, "🔊 Speaker " + status + '\n');
     }
 
@@ -1130,9 +1133,9 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         }
     }
 
-    private void updateSpeakerButton()
+    private void updateSpeakerButton(boolean isMuted)
     {
-        speakerToggleButton.setText(speakerMuted ? "🔇" : "🔊");
+        speakerToggleButton.setText(isMuted ? "🔇" : "🔊");
     }
 
     private void updateStatus(String status, Color color)
@@ -1205,12 +1208,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     }
 
     @Override
-    public void onAudioResponseStarted()
+    public void onAudioResponseStarted(boolean micWasMuted)
     {
         SwingUtilities.invokeLater(() ->
         {
-            // Capture current microphone state before AI response starts
-            micMutedBeforeAIResponse = !(voiceService != null && voiceService.isRecording());
+            micMutedBeforeAiResponse = micWasMuted;
+            speakerMutedBeforeAiResponse = voiceService.getAudioService().isAudioMuted();
             aiResponseActive = true;
             userInterruptedAI = false; // Reset interrupt flag for new AI response
             updateMicrophoneButton();
@@ -1220,25 +1223,17 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     @Override
     public void onAudioResponseCompleted()
     {
+        aiResponseActive = false;
         SwingUtilities.invokeLater(() ->
         {
-            aiResponseActive = false;
-
-            if (!userInterruptedAI && voiceService != null) // else, whatever state the mic is in is desired
+            if (micMutedBeforeAiResponse)
             {
-                // Normal AI response completion - restore original mic state
-                // Note: VoiceService always stops microphone during AI response, so we need to restore based on original state
-                if (!micMutedBeforeAIResponse)
-                {
-                    // Mic was recording before AI started - restore it to recording state
-                    voiceService.startVoiceSession();
-                }
-                else
-                {
-                    updateMicrophoneButton();
-                }
+                updateMicrophoneButton(); // still muted, but we might have the "muted because AI speaking" icon
             }
-
+            else
+            {
+                voiceService.startVoiceSession(); // when session starts, button will be updated via callback
+            }
 
             // Reset streaming state when response is completed
             synchronized (logEntries)
@@ -1383,14 +1378,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     public void onUserSpeechEnded()
     {
         // Unmute output if it was muted during user speech after push-to-interrupt
-        if (speakerMuted && userInterruptedAI && voiceService != null && voiceService.getAudioService() != null)
+        if (voiceService.getAudioService().isAudioMuted() && !speakerMutedBeforeAiResponse && userInterruptedAI)
         {
             voiceService.getAudioService().setAudioMuted(false);
-            speakerMuted = false;
-            updateSpeakerButton();
+            updateSpeakerButton(false);
             addLogEntry(LogLevel.DEBUG, "🔊 Output unmuted after user finished speaking\n");
         }
-        userInterruptedAI = false;
     }
 
     @Override
@@ -1580,6 +1573,17 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         });
     }
 
+    private void logPluginInfo()
+    {
+        PluginId pluginId = PluginManagerCore.getPluginByClassName(getClass().getName());
+        PluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+        String pluginInfo = "Plugin Info" +
+            "\n- ID:     " + descriptor.getPluginId() +
+            "\n- Name:   " + descriptor.getName() +
+            "\n- Version:" + descriptor.getVersion();
+        addLogEntry(LogLevel.DEBUG, pluginInfo);
+    }
+
     /**
      * Collects recent transcript messages for OpenAI Responses API analysis
      *
@@ -1617,5 +1621,4 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         return transcriptMessages;
     }
-
 }

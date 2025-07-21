@@ -322,6 +322,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
     public void onAudioResponse(byte[] audioData)
     {
         log.debug("Received audio response: {} bytes", audioData.length);
+        boolean wasMuted = !audioService.isRecording();
 
         // Start audio playback on first audio delta
         if (!audioResponseActive)
@@ -329,7 +330,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
             audioResponseActive = true;
 
             // Stop microphone recording to prevent feedback loop
-            if (audioService.isRecording())
+            if (!wasMuted)
             {
                 audioService.stopRecording();
                 log.info("Stopped microphone recording to prevent feedback during AI response");
@@ -341,7 +342,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
             // Notify listener that audio response started
             if (serviceListener != null)
             {
-                serviceListener.onAudioResponseStarted();
+                serviceListener.onAudioResponseStarted(wasMuted);
             }
         }
 
@@ -417,7 +418,7 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
 
         void onUserSpeechEnded();
 
-        void onAudioResponseStarted();
+        void onAudioResponseStarted(boolean micWasMuted);
 
         void onAudioResponseCompleted();
 

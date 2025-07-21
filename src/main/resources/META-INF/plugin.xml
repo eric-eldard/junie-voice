@@ -1,9 +1,8 @@
 <idea-plugin version="2">
-    <id>${project.artifactId}</id>
-    <name>${project.name}</name>
+    <id>${pluginId}</id>
+    <name>${pluginNamePretty}</name>
     <version>${project.version}</version>
-    <vendor email="${organization.email}" url="${organization.url}">${organization.name}</vendor>
-    <idea-version since-build="241" until-build="251.*"/>
+    <idea-version since-build="${sinceBuild}" until-build="${untilBuild}"/>
 
     <description>
     <![CDATA[
@@ -19,9 +18,10 @@
     </change-notes>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="Voice Assistant"
-                    displayName="Junie Voice" 
-                    anchor="right" 
+        <toolWindow id="Junie Voice"
+                    displayName="Junie Voice"
+                    icon="AllIcons.CodeWithMe.CwmMicAvatarOn"
+                    anchor="right"
                     factoryClass="com.eric_eldard.VoiceAssistantToolWindowFactory"
                     canCloseContents="false"/>
     </extensions>

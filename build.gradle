@@ -4,9 +4,6 @@ plugins {
     id 'io.freefair.lombok' version '8.4'
 }
 
-group = 'com.eric_eldard'
-version = '1.0-SNAPSHOT'
-
 repositories {
     mavenCentral()
     google()
@@ -28,13 +25,13 @@ java {
 
 intellijPlatform {
     pluginConfiguration {
+        group = providers.gradleProperty("pluginGroup")
         version = providers.gradleProperty("pluginVersion")
         description = providers.gradleProperty("pluginDescription")
         ideaVersion {
             sinceBuild = "251"
             untilBuild = "260.*"
         }
-        changeNotes = "Initial release."
     }
 }
 
@@ -70,4 +67,9 @@ dependencies {
 // Compile encoding
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+patchPluginXml {
+    pluginId = "${pluginGroup}:${project.name}"
+    pluginNamePretty = "${pluginNamePretty}"
 }
