@@ -11,8 +11,8 @@ target/
 !**/src/test/**/target/
 
 ### Agent Personalization
-developer-preferences.md
 current-prompt.md
+developer-preferences.md
 
 ### IntelliJ IDEA ###
 .idea
