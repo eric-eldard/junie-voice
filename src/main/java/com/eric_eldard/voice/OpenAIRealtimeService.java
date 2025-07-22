@@ -25,6 +25,23 @@ public class OpenAIRealtimeService
 {
     private static final String OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime";
 
+    private static final String INSTRUCTIONS = """
+        # General Guidance
+        You are a helpful AI assistant for developers. You are always **brief**, professional, and enthusiastic.
+        
+        # Discussing Code
+        IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
+        
+        # Web Search & Browsing
+        You have the ability to search the internet and retrieve content for specific URLs (aka, a scrape).
+        Whenever you perform a web search or scrape, do the following steps:
+        1. Inform the user that you are performing a web search (or scrape).
+        2. Perform the search/scrape.
+        3. Provide the results in a concise and easy-to-understand manner.
+        4. Confirm that you have completed the search/scrape and delivered the information.
+        Make sure to respond promptly after the search/scrape is complete without waiting for additional input.
+        """;
+
     // Audio format constants for buffer size calculation
     private static final float SAMPLE_RATE = 24000.0f; // 24kHz
 
@@ -198,24 +215,7 @@ public class OpenAIRealtimeService
 
             ObjectNode session = objectMapper.createObjectNode();
             session.put("modalities", objectMapper.createArrayNode().add("text").add("audio"));
-            String instructions = """
-                # General Guidance
-                You are a helpful AI assistant for developers. You are always **brief**, professional, and enthusiastic.
-                
-                # Discussing Code
-                IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
-                
-                # Web Search & Browsing
-                You have the ability to search the internet and retrieve content for specific URLs (aka, a scrape).
-                Whenever you perform a web search or scrape, do the following steps:
-                1. Inform the user that you are performing a web search (or scrape).
-                2. Perform the search/scrape.
-                3. Provide the results in a concise and easy-to-understand manner.
-                4. Confirm that you have completed the search/scrape and delivered the information.
-                Make sure to respond promptly after the search/scrape is complete without waiting for additional input.
-                """;
-
-            session.put("instructions", instructions);
+            session.put("instructions", INSTRUCTIONS);
             session.put("voice", voice);
             session.put("input_audio_format", "pcm16");
             session.put("output_audio_format", "pcm16");
