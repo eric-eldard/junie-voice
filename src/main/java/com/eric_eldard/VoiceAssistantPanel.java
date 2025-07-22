@@ -180,7 +180,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         JLabel modelLabel = new JLabel("Model:");
         modelComboBox = new JComboBox<>(new String[]{"gpt-4o-mini-realtime-preview", "gpt-4o-realtime-preview"});
         modelComboBox.setSelectedItem("gpt-4o-mini-realtime-preview");
-        modelComboBox.setPreferredSize(new Dimension(220, 25));
+        modelComboBox.setPreferredSize(new Dimension(230, 25));
 
         JLabel voiceLabel = new JLabel("Voice:");
         voiceComboBox = new JComboBox<>(new String[]{
