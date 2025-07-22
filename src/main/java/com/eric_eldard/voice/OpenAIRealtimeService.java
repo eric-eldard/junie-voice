@@ -32,6 +32,10 @@ public class OpenAIRealtimeService
         # Discussing Code
         IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
         
+        # Creating Prompts
+        IMPORTANT: Never speak prompts aloud - when the user wants to build something or create a prompt for another
+        agent, simply say, "I'll generate a prompt for you". The text agent will handle the actual prompt creation.
+        
         # Web Search & Browsing
         You have the ability to search the internet and retrieve content for specific URLs (aka, a scrape).
         Whenever you perform a web search or scrape, do the following steps:

@@ -1,3 +1,8 @@
+# Build
+```
+./gradlew buildPlugin
+```
+
 # TODO
 1. Allow interruption _w/o push-to-interrupt_ (echo cancellation)
 2. Fix "code blocks not block-level elements"

@@ -1,8 +1,14 @@
 package com.eric_eldard;
 
+import static com.eric_eldard.voice.OpenAIResponsesService.LABEL_CODE_REQUEST;
+import static com.eric_eldard.voice.OpenAIResponsesService.LABEL_NON_GENERATIVE_REQUEST;
+import static com.eric_eldard.voice.OpenAIResponsesService.LABEL_PROMPT_REQUEST;
+
 import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.extensions.PluginDescriptor;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.project.Project;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
@@ -43,6 +49,11 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -146,8 +157,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     // File dialog folder memory
     private static java.io.File lastAccessedDirectory;
 
-    public VoiceAssistantPanel()
+    // IntelliJ project reference for proper path resolution
+    private final Project project;
+
+    public VoiceAssistantPanel(Project project)
     {
+        this.project = project;
         initializeComponents();
         setupEventHandlers();
         checkForAutoConnect();
@@ -230,8 +245,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         // Volume meter
         JLabel volumeLabel = new JLabel("Mic Volume:");
-        UIManager.put("ProgressBar.selectionForeground",Color.WHITE);
-        UIManager.put("ProgressBar.selectionBackground",Color.GRAY);
+        UIManager.put("ProgressBar.selectionForeground", Color.WHITE);
+        UIManager.put("ProgressBar.selectionBackground", Color.GRAY);
         volumeMeter = new JProgressBar(0, 100);
         volumeMeter.setUI(new BasicProgressBarUI());
         volumeMeter.setStringPainted(true);
@@ -1013,7 +1028,6 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
             transcriptMessages.add(new OpenAIResponsesService.TranscriptMessage("user", response));
 
             responsesService.analyzeForCodeRequest(transcriptMessages).thenAccept(codeResponse ->
-            {
                 SwingUtilities.invokeLater(() ->
                 {
                     if (!"[non-code-request]".equals(codeResponse))
@@ -1025,8 +1039,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
                     {
                         addLogEntry(LogLevel.DEBUG, "Code agent response: [non-code-request]");
                     }
-                });
-            });
+                })
+            );
         }
     }
 
@@ -1252,6 +1266,13 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     @Override
     public void onUserTranscript(String transcript)
     {
+        // Safety net: Skip processing if transcript is empty or whitespace only
+        if (transcript == null || transcript.trim().isEmpty())
+        {
+            log.debug("Received empty or whitespace-only transcript, skipping processing");
+            return;
+        }
+
         SwingUtilities.invokeLater(() ->
         {
             synchronized (logEntries)
@@ -1298,21 +1319,56 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
                     responsesService.analyzeForCodeRequest(transcriptMessages)
                         .thenAccept(result -> SwingUtilities.invokeLater(() ->
                         {
-                            if ("[non-code-request]".equals(result))
+                            if (LABEL_NON_GENERATIVE_REQUEST.equals(result))
                             {
-                                // Log non-code requests to DEBUG
+                                // Log non-generative requests to DEBUG
                                 addLogEntry(LogLevel.DEBUG, "Code agent: <i>No code found in this request</i>\n");
                             }
-                            else if (!result.trim().startsWith("```"))
+                            else if (result.startsWith(LABEL_PROMPT_REQUEST))
                             {
-                                // Disregard responses that don't begin with markdown blocks
-                                addLogEntry(LogLevel.DEBUG, "Code agent: <i>Response doesn't begin with markdown block, disregarding</i>\n");
+                                addLogEntry(LogLevel.DEBUG, "📝 Prompt request detected");
+
+                                // Extract prompt content after the marker and remove label
+                                String promptContent = removeLabelFromResponse(result, LABEL_PROMPT_REQUEST);
+                                if (!promptContent.isEmpty())
+                                {
+                                    addLogEntry(LogLevel.INFO, "🤖 Agent: " + promptContent);
+                                    writePromptToFile(promptContent);
+                                }
+                                else
+                                {
+                                    addLogEntry(LogLevel.DEBUG, "Prompt request detected but no content provided");
+                                }
+                            }
+                            else if (result.startsWith(LABEL_CODE_REQUEST))
+                            {
+                                // Extract code content after the marker and remove label
+                                String codeContent = removeLabelFromResponse(result, LABEL_CODE_REQUEST);
+                                if (!codeContent.isEmpty())
+                                {
+                                    // Append code response to the log as a new message from the agent (without label)
+                                    String codeMessage = AGENT_PREFIX + codeContent + '\n';
+                                    addLogEntry(LogLevel.INFO, codeMessage);
+                                }
+                                else
+                                {
+                                    addLogEntry(LogLevel.DEBUG, "Code request detected but no content provided");
+                                }
                             }
                             else
                             {
-                                // Append code response to the log as a new message from the agent
-                                String codeMessage = AGENT_PREFIX + result + '\n';
-                                addLogEntry(LogLevel.INFO, codeMessage);
+                                // Fallback for unlabeled responses - check if it looks like code
+                                if (result.trim().startsWith("```"))
+                                {
+                                    // Append code response to the log as a new message from the agent
+                                    String codeMessage = AGENT_PREFIX + result + '\n';
+                                    addLogEntry(LogLevel.INFO, codeMessage);
+                                }
+                                else
+                                {
+                                    // Disregard responses that don't begin with markdown blocks and aren't labeled
+                                    addLogEntry(LogLevel.DEBUG, "Code agent: <i>Response doesn't begin with markdown block and isn't labeled, disregarding</i>\n");
+                                }
                             }
                         }))
                         .exceptionally(throwable ->
@@ -1584,6 +1640,77 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
                 "\n- Name:   " + descriptor.getName() +
                 "\n- Version:" + descriptor.getVersion();
             addLogEntry(LogLevel.DEBUG, pluginInfo);
+        }
+    }
+
+    /**
+     * Removes the label from an LLM response and returns the content
+     *
+     * @param response The full response from the LLM
+     * @param label    The label to remove (e.g., LABEL_PROMPT_REQUEST, LABEL_CODE_REQUEST)
+     * @return The content without the label
+     */
+    private String removeLabelFromResponse(String response, String label)
+    {
+        if (response.startsWith(label))
+        {
+            return response.substring(label.length()).trim();
+        }
+        return response.trim();
+    }
+
+    /**
+     * Writes a prompt to the .junie/current-prompt.md file
+     * Creates the .junie directory if it doesn't exist
+     * Truncates the file if it already exists
+     *
+     * @param promptContent The prompt content to write
+     */
+    private void writePromptToFile(String promptContent)
+    {
+        try
+        {
+            // Get the IntelliJ project root directory
+            if (project == null || project.getBasePath() == null)
+            {
+                addLogEntry(LogLevel.DEBUG, "Project is null or has no base path - skipping prompt file write");
+                return;
+            }
+
+            Path projectRoot = Paths.get(project.getBasePath());
+            Path junieDir = projectRoot.resolve(".junie");
+            Path promptFile = junieDir.resolve("current-prompt.md");
+
+            // Create .junie directory if it doesn't exist
+            if (!Files.exists(junieDir))
+            {
+                Files.createDirectories(junieDir);
+                addLogEntry(LogLevel.DEBUG, "Created .junie directory at: " + junieDir);
+            }
+
+            // Write the prompt content to the file (truncating if it exists)
+            // Use try-with-resources to ensure proper file closing
+            try (var writer = Files.newBufferedWriter(promptFile,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING)
+            )
+            {
+                writer.write(promptContent);
+                writer.flush(); // Explicitly flush to ensure data is written
+            }
+
+            // Refresh the IntelliJ VFS to make changes immediately visible
+            // Use ApplicationManager.invokeLater to avoid threading violations
+            ApplicationManager.getApplication().invokeLater(() ->
+                com.intellij.openapi.vfs.VirtualFileManager.getInstance().refreshWithoutFileWatcher(false)
+            );
+
+            addLogEntry(LogLevel.INFO, "✅ Prompt written to: " + promptFile);
+        }
+        catch (IOException e)
+        {
+            log.error("Error writing prompt to file", e);
+            addLogEntry(LogLevel.INFO, "❌ Error writing prompt to file: " + e.getMessage());
         }
     }
 

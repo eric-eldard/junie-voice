@@ -15,7 +15,7 @@ public class VoiceAssistantToolWindowFactory implements ToolWindowFactory
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow)
     {
-        VoiceAssistantPanel voicePanel = new VoiceAssistantPanel();
+        VoiceAssistantPanel voicePanel = new VoiceAssistantPanel(project);
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(voicePanel.getContent(), "", false);
         toolWindow.getContentManager().addContent(content);

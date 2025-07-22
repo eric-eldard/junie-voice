@@ -3,6 +3,8 @@
 - Ask clarifying questions until you are confident you understand the user's request
 - Do not generate code that has not been requested. For example, when asked to create a service, do not add methods to
   the service that are not specifically asked for.
+- If you run any tests or other run configurations, remember the run config that was selected before you started, and
+  re-select that config when you are done (_do not_ run this config)
 
 ## Response format
 When delivering any response after changing project code, use the following format:

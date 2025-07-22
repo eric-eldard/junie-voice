@@ -26,6 +26,47 @@ public class OpenAIResponsesService
     private static final String MODEL = "gpt-4.1-mini";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
+    // LLM response label constants
+    public static final String LABEL_PROMPT_REQUEST = "[prompt-request]";
+    public static final String LABEL_CODE_REQUEST = "[code-request]";
+    public static final String LABEL_NON_GENERATIVE_REQUEST = "[non-generative-request]";
+
+    private static final String INSTRUCTIONS = String.format("""
+        You are analyzing a conversation between a user and a voice assistant.
+        Your task is to determine if the user's latest request indicates they want:
+        1. Code to be produced
+        2. A prompt to be created for building something
+        3. Neither (general conversation)
+        
+        ALWAYS respond with one of these labels first, followed by your content:
+        
+        For CODE requests: Start with %s followed by an appropriate code snippet in markdown format.
+        
+        For PROMPT requests: Start with %s followed by direct, comprehensive implementation instructions for a code-capable AI. 
+        Write clear, actionable instructions that tell the AI exactly what to build, including all relevant context from the conversation.
+        Do NOT write instructions for writing prompts - write the actual implementation instructions directly.
+        
+        For NON-GENERATIVE requests: Respond with exactly %s only.
+        
+        Examples of CODE requests:
+        - 'Can you write a function to...'
+        - 'Show me how to implement...'
+        - 'Create a class that...'
+        - 'Generate code for...'
+        
+        Examples of PROMPT requests:
+        - 'I want to build a web application that...'
+        - 'Help me create a system for...'
+        - 'I need to develop a tool that...'
+        - 'Let's build something that...'
+        
+        Examples of NON-GENERATIVE requests:
+        - General questions about concepts
+        - Requests for explanations
+        - Casual conversation
+        - Questions about how something works conceptually
+        """, LABEL_CODE_REQUEST, LABEL_PROMPT_REQUEST, LABEL_NON_GENERATIVE_REQUEST);
+
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
@@ -60,7 +101,7 @@ public class OpenAIResponsesService
      * Analyzes transcript messages to determine if code should be produced
      *
      * @param transcriptMessages List of recent transcript messages
-     * @return CompletableFuture that resolves to either "[non-code-request]" or code in markdown
+     * @return CompletableFuture that resolves to labeled response: LABEL_CODE_REQUEST, LABEL_PROMPT_REQUEST, or LABEL_NON_GENERATIVE_REQUEST
      */
     public CompletableFuture<String> analyzeForCodeRequest(List<TranscriptMessage> transcriptMessages)
     {
@@ -84,7 +125,7 @@ public class OpenAIResponsesService
                     {
                         log.error("OpenAI API call failed with status: {}, body: {}",
                             response.code(), response.body() != null ? response.body().string() : "null");
-                        return "[non-code-request]"; // Default to non-code on error
+                        return LABEL_NON_GENERATIVE_REQUEST; // Default to non-generative on error
                     }
 
                     String responseBody = response.body().string();
@@ -103,20 +144,39 @@ public class OpenAIResponsesService
                             if (content != null)
                             {
                                 String result = content.asText().trim();
-                                log.debug("OpenAI Responses API result: {}", result);
+                                log.info("OpenAI Responses API result: {}", result);
+
+                                // Enhanced debugging for prompt detection
+                                if (result.startsWith(LABEL_PROMPT_REQUEST))
+                                {
+                                    log.info("✅ PROMPT REQUEST DETECTED");
+                                }
+                                else if (result.startsWith(LABEL_CODE_REQUEST))
+                                {
+                                    log.info("✅ CODE REQUEST DETECTED");
+                                }
+                                else if (result.startsWith(LABEL_NON_GENERATIVE_REQUEST))
+                                {
+                                    log.info("✅ NON-GENERATIVE REQUEST DETECTED");
+                                }
+                                else
+                                {
+                                    log.warn("⚠️ NO RECOGNIZED LABEL DETECTED - Response: {}", result);
+                                }
+
                                 return result;
                             }
                         }
                     }
 
                     log.warn("Unexpected response format from OpenAI API: {}", responseBody);
-                    return "[non-code-request]"; // Default to non-code on unexpected format
+                    return LABEL_NON_GENERATIVE_REQUEST; // Default to non-generative on unexpected format
                 }
             }
             catch (IOException e)
             {
                 log.error("Error calling OpenAI Responses API", e);
-                return "[non-code-request]"; // Default to non-code on error
+                return LABEL_NON_GENERATIVE_REQUEST; // Default to non-generative on error
             }
         });
     }
@@ -134,31 +194,7 @@ public class OpenAIResponsesService
         // Add system message with instructions
         ObjectNode systemMessage = objectMapper.createObjectNode();
         systemMessage.put("role", "system");
-
-        String systemContent = """
-            You are analyzing a conversation between a user and a voice assistant.
-            Your task is to determine if the user's latest request indicates they want code to be produced.
-            
-            If the user's latest request EXPLICITLY indicates they want code, respond only with an appropriate code snippet in markdown format.
-            
-            If the user's latest request does NOT EXPLICITLY indicate they want code, respond with exactly: [non-code-request]
-            
-            ALWAYS respond with an appropriate code snippet in markdown format OR with exactly: [non-code-request]
-            
-            Examples of requests that indicate code is wanted:
-            - 'Can you write a function to...'
-            - 'Show me how to implement...'
-            - 'Create a class that...'
-            - 'Generate code for...'
-            
-            Examples of requests that do NOT indicate code is wanted:
-            - General questions about concepts
-            - Requests for explanations
-            - Casual conversation
-            - Questions about how something works conceptually
-            """;
-
-        systemMessage.put("content", systemContent);
+        systemMessage.put("content", INSTRUCTIONS);
         messages.add(systemMessage);
 
         // Add transcript messages

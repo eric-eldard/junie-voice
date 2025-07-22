@@ -10,6 +10,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Agent Personalization
+developer-preferences.md
+current-prompt.md
+
 ### IntelliJ IDEA ###
 .idea
 .intellijPlatform
