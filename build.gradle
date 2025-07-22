@@ -71,5 +71,5 @@ tasks.withType(JavaCompile) {
 
 patchPluginXml {
     pluginId = "${pluginGroup}:${project.name}"
-    pluginNamePretty = "${pluginNamePretty}"
+    pluginName = "${pluginNamePretty}"
 }

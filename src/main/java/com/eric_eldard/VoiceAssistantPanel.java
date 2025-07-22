@@ -1577,11 +1577,14 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     {
         PluginId pluginId = PluginManagerCore.getPluginByClassName(getClass().getName());
         PluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
-        String pluginInfo = "Plugin Info" +
-            "\n- ID:     " + descriptor.getPluginId() +
-            "\n- Name:   " + descriptor.getName() +
-            "\n- Version:" + descriptor.getVersion();
-        addLogEntry(LogLevel.DEBUG, pluginInfo);
+        if (descriptor != null)
+        {
+            String pluginInfo = "Plugin Info" +
+                "\n- ID:     " + descriptor.getPluginId() +
+                "\n- Name:   " + descriptor.getName() +
+                "\n- Version:" + descriptor.getVersion();
+            addLogEntry(LogLevel.DEBUG, pluginInfo);
+        }
     }
 
     /**
