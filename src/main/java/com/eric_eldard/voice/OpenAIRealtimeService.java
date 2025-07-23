@@ -605,10 +605,7 @@ public class OpenAIRealtimeService
             // Configure response to include both text and audio
             ObjectNode response = objectMapper.createObjectNode();
             response.put("modalities", objectMapper.createArrayNode().add("text").add("audio"));
-            response.put("instructions",
-                "Respond with energy and enthusiasm while maintaining strict professionalism! Be engaging and upbeat," +
-                    " but always use proper business language. Avoid roleplay, slang, casual expressions, or " +
-                    "character voices. Stay focused on being a helpful, knowledgeable assistant.");
+            response.put("instructions", instructions);
 
             responseRequest.set("response", response);
 

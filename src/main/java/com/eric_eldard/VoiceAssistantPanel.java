@@ -713,8 +713,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
             String selectedModel = (String) modelComboBox.getSelectedItem();
             String selectedVoice = (String) voiceComboBox.getSelectedItem();
 
-            String junieConfig =
-                JunieConfigReader.readJunieConfig(project, message -> addLogEntry(LogLevel.DEBUG, message));
+            String junieConfig = loadJunieConfig();
 
             voiceService = new VoiceService(apiKey, selectedModel, selectedVoice, junieConfig);
             voiceService.setServiceListener(this);
@@ -844,6 +843,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         // Send the text message to the voice service
         voiceService.sendTextMessage(text);
+
+        // Also call OpenAI Responses API to determine if code should be produced
+        // This ensures text messages get the same analysis as voice transcripts
+        processTranscript();
 
         // Clear the text input area
         textInputArea.setText("");
@@ -1023,29 +1026,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         }
 
         // Send the response to the code agent (OpenAI Responses Service)
-        if (responsesService != null)
-        {
-            // Collect recent transcript messages for context
-            List<OpenAIResponsesService.TranscriptMessage> transcriptMessages = collectRecentTranscriptMessages(10);
-
-            // Add the file upload response as a user message
-            transcriptMessages.add(new OpenAIResponsesService.TranscriptMessage("user", response));
-
-            responsesService.analyzeForCodeRequest(transcriptMessages).thenAccept(codeResponse ->
-                SwingUtilities.invokeLater(() ->
-                {
-                    if (!"[non-code-request]".equals(codeResponse))
-                    {
-                        // Display code response as agent transcript
-                        addLogEntry(LogLevel.INFO, "Assistant: " + codeResponse);
-                    }
-                    else
-                    {
-                        addLogEntry(LogLevel.DEBUG, "Code agent response: [non-code-request]");
-                    }
-                })
-            );
-        }
+        processTranscript();
     }
 
     private void handleClipboardPaste()
@@ -1315,75 +1296,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
             // Call OpenAI Responses API to determine if code should be produced
             // This happens when user finishes talking for faster response time
-            if (responsesService != null)
-            {
-                List<OpenAIResponsesService.TranscriptMessage> transcriptMessages = collectRecentTranscriptMessages(10);
-                if (!transcriptMessages.isEmpty())
-                {
-                    responsesService.analyzeForCodeRequest(transcriptMessages)
-                        .thenAccept(result -> SwingUtilities.invokeLater(() ->
-                        {
-                            if (LABEL_NON_GENERATIVE_REQUEST.equals(result))
-                            {
-                                // Log non-generative requests to DEBUG
-                                addLogEntry(LogLevel.DEBUG, "Code agent: <i>No code found in this request</i>\n");
-                            }
-                            else if (result.startsWith(LABEL_PROMPT_REQUEST))
-                            {
-                                addLogEntry(LogLevel.DEBUG, "📝 Prompt request detected");
-
-                                // Extract prompt content after the marker and remove label
-                                String promptContent = removeLabelFromResponse(result, LABEL_PROMPT_REQUEST);
-                                if (!promptContent.isEmpty())
-                                {
-                                    addLogEntry(LogLevel.INFO, "🤖 Agent: " + promptContent);
-                                    writePromptToFile(promptContent);
-                                }
-                                else
-                                {
-                                    addLogEntry(LogLevel.DEBUG, "Prompt request detected but no content provided");
-                                }
-                            }
-                            else if (result.startsWith(LABEL_CODE_REQUEST))
-                            {
-                                // Extract code content after the marker and remove label
-                                String codeContent = removeLabelFromResponse(result, LABEL_CODE_REQUEST);
-                                if (!codeContent.isEmpty())
-                                {
-                                    // Append code response to the log as a new message from the agent (without label)
-                                    String codeMessage = AGENT_PREFIX + codeContent + '\n';
-                                    addLogEntry(LogLevel.INFO, codeMessage);
-                                }
-                                else
-                                {
-                                    addLogEntry(LogLevel.DEBUG, "Code request detected but no content provided");
-                                }
-                            }
-                            else
-                            {
-                                // Fallback for unlabeled responses - check if it looks like code
-                                if (result.trim().startsWith("```"))
-                                {
-                                    // Append code response to the log as a new message from the agent
-                                    String codeMessage = AGENT_PREFIX + result + '\n';
-                                    addLogEntry(LogLevel.INFO, codeMessage);
-                                }
-                                else
-                                {
-                                    // Disregard responses that don't begin with markdown blocks and aren't labeled
-                                    addLogEntry(LogLevel.DEBUG, "Code agent: <i>Response doesn't begin with markdown block and isn't labeled, disregarding</i>\n");
-                                }
-                            }
-                        }))
-                        .exceptionally(throwable ->
-                        {
-                            log.error("Error calling OpenAI Responses API", throwable);
-                            SwingUtilities.invokeLater(() ->
-                                addLogEntry(LogLevel.DEBUG, "❌ Error calling OpenAI Responses API\n"));
-                            return null;
-                        });
-                }
-            }
+            processTranscript();
         });
     }
 
@@ -1633,6 +1546,85 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         });
     }
 
+    private void processTranscript()
+    {
+        if (responsesService != null)
+        {
+            List<OpenAIResponsesService.TranscriptMessage> transcriptMessages = collectRecentTranscriptMessages(10);
+            if (!transcriptMessages.isEmpty())
+            {
+                responsesService.analyzeForCodeRequest(transcriptMessages)
+                    .thenAccept(result -> SwingUtilities.invokeLater(() -> handleProcessTranscriptResults(result)))
+                    .exceptionally(throwable ->
+                    {
+                        log.error("Error calling OpenAI Responses API for text message", throwable);
+                        SwingUtilities.invokeLater(() ->
+                            addLogEntry(LogLevel.DEBUG, "Code agent: <i>Error analyzing text message</i>\n"));
+                        return null;
+                    });
+            }
+        }
+    }
+
+    /**
+     * Processes the result from OpenAI Responses API code analysis
+     * This method handles the common response processing logic for both voice and text inputs
+     */
+    private void handleProcessTranscriptResults(String result)
+    {
+        if (LABEL_NON_GENERATIVE_REQUEST.equals(result))
+        {
+            // Log non-generative requests to DEBUG
+            addLogEntry(LogLevel.DEBUG, "Code agent: <i>No code found in this request</i>\n");
+        }
+        else if (result.startsWith(LABEL_PROMPT_REQUEST))
+        {
+            addLogEntry(LogLevel.DEBUG, "📝 Prompt request detected");
+
+            // Extract prompt content after the marker and remove label
+            String promptContent = removeLabelFromResponse(result, LABEL_PROMPT_REQUEST);
+            if (!promptContent.isEmpty())
+            {
+                addLogEntry(LogLevel.INFO, "🤖 Agent: " + promptContent);
+                writePromptToFile(promptContent);
+            }
+            else
+            {
+                addLogEntry(LogLevel.DEBUG, "Prompt request detected but no content provided");
+            }
+        }
+        else if (result.startsWith(LABEL_CODE_REQUEST))
+        {
+            // Extract code content after the marker and remove label
+            String codeContent = removeLabelFromResponse(result, LABEL_CODE_REQUEST);
+            if (!codeContent.isEmpty())
+            {
+                // Append code response to the log as a new message from the agent (without label)
+                String codeMessage = AGENT_PREFIX + codeContent + '\n';
+                addLogEntry(LogLevel.INFO, codeMessage);
+            }
+            else
+            {
+                addLogEntry(LogLevel.DEBUG, "Code request detected but no content provided");
+            }
+        }
+        else
+        {
+            // Fallback for unlabeled responses - check if it looks like code
+            if (result.trim().startsWith("```"))
+            {
+                // Append code response to the log as a new message from the agent
+                String codeMessage = AGENT_PREFIX + result + '\n';
+                addLogEntry(LogLevel.INFO, codeMessage);
+            }
+            else
+            {
+                // Disregard responses that don't begin with markdown blocks and aren't labeled
+                addLogEntry(LogLevel.DEBUG, "Code agent: <i>Response doesn't begin with markdown block and isn't labeled, disregarding</i>\n");
+            }
+        }
+    }
+
     private void logPluginInfo()
     {
         PluginId pluginId = PluginManagerCore.getPluginByClassName(getClass().getName());
@@ -1754,5 +1746,10 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         }
 
         return transcriptMessages;
+    }
+
+    private String loadJunieConfig()
+    {
+        return JunieConfigReader.readJunieConfig(project, message -> addLogEntry(LogLevel.DEBUG, message));
     }
 }
