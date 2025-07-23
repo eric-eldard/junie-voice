@@ -2,6 +2,7 @@ package com.eric_eldard.voice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -25,27 +26,6 @@ public class OpenAIRealtimeService
 {
     private static final String OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime";
 
-    private static final String INSTRUCTIONS = """
-        # General Guidance
-        You are a helpful AI assistant for developers. You are always **brief**, professional, and enthusiastic.
-        
-        # Discussing Code
-        IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
-        
-        # Creating Prompts
-        IMPORTANT: Never speak prompts aloud - when the user wants to build something or create a prompt for another
-        agent, simply say, "I'll generate a prompt for you". The text agent will handle the actual prompt creation.
-        
-        # Web Search & Browsing
-        You have the ability to search the internet and retrieve content for specific URLs (aka, a scrape).
-        Whenever you perform a web search or scrape, do the following steps:
-        1. Inform the user that you are performing a web search (or scrape).
-        2. Perform the search/scrape.
-        3. Provide the results in a concise and easy-to-understand manner.
-        4. Confirm that you have completed the search/scrape and delivered the information.
-        Make sure to respond promptly after the search/scrape is complete without waiting for additional input.
-        """;
-
     // Audio format constants for buffer size calculation
     private static final float SAMPLE_RATE = 24000.0f; // 24kHz
 
@@ -54,6 +34,8 @@ public class OpenAIRealtimeService
     private static final int CHANNELS = 1;
 
     private static final long MIN_BUFFER_DURATION_MS = 100; // Minimum 100ms of audio
+
+    private final String instructions;
 
     private final String apiKey;
 
@@ -87,24 +69,41 @@ public class OpenAIRealtimeService
 
     private final Object bufferLock = new Object();
 
-    private OkHttpClient client;
+    private final OkHttpClient client;
 
     private WebSocket webSocket;
 
+    @Setter
     private VoiceEventListener eventListener;
 
-    public OpenAIRealtimeService(String apiKey, String model, String voice)
+    public OpenAIRealtimeService(String apiKey, String model, String voice, String junieConfig)
     {
         this.apiKey = apiKey;
         this.model = model;
         this.voice = voice;
         this.objectMapper = new ObjectMapper();
         this.client = new OkHttpClient();
-    }
+        this.instructions = junieConfig + """
+            
+            # General Guidance
+            You are a helpful AI assistant for developers. You are always **brief**, professional, and enthusiastic.
 
-    public void setEventListener(VoiceEventListener listener)
-    {
-        this.eventListener = listener;
+            # Discussing Code
+            IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
+            
+            # Creating Prompts
+            IMPORTANT: Never speak prompts aloud - when the user wants to build something or create a prompt for another
+            agent, simply say, "I'll generate a prompt for you". The text agent will handle the actual prompt creation.
+
+            # Web Search & Browsing
+            You have the ability to search the internet and retrieve content for specific URLs (aka, a scrape).
+            Whenever you perform a web search or scrape, do the following steps:
+            1. Inform the user that you are performing a web search (or scrape).
+            2. Perform the search/scrape.
+            3. Provide the results in a concise and easy-to-understand manner.
+            4. Confirm that you have completed the search/scrape and delivered the information.
+            Make sure to respond promptly after the search/scrape is complete without waiting for additional input.
+            """;
     }
 
     public CompletableFuture<Boolean> connect()
@@ -219,7 +218,7 @@ public class OpenAIRealtimeService
 
             ObjectNode session = objectMapper.createObjectNode();
             session.put("modalities", objectMapper.createArrayNode().add("text").add("audio"));
-            session.put("instructions", INSTRUCTIONS);
+            session.put("instructions", instructions);
             session.put("voice", voice);
             session.put("input_audio_format", "pcm16");
             session.put("output_audio_format", "pcm16");

@@ -66,6 +66,7 @@ import com.eric_eldard.ui.log.HtmlLogPanel;
 import com.eric_eldard.ui.log.LogEntry;
 import com.eric_eldard.ui.log.LogLevel;
 import com.eric_eldard.ui.log.TextLogPanel;
+import com.eric_eldard.util.JunieConfigReader;
 import com.eric_eldard.voice.OpenAIFilesService;
 import com.eric_eldard.voice.OpenAIResponsesService;
 import com.eric_eldard.voice.VoiceService;
@@ -163,6 +164,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     public VoiceAssistantPanel(Project project)
     {
         this.project = project;
+        logPluginInfo();
         initializeComponents();
         setupEventHandlers();
         checkForAutoConnect();
@@ -378,8 +380,6 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
         centerPanel.add(logPanel, BorderLayout.CENTER);
         mainPanel.add(centerPanel, BorderLayout.CENTER);
-
-        logPluginInfo();
     }
 
     private void setupEventHandlers()
@@ -712,11 +712,15 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
 
             String selectedModel = (String) modelComboBox.getSelectedItem();
             String selectedVoice = (String) voiceComboBox.getSelectedItem();
-            voiceService = new VoiceService(apiKey, selectedModel, selectedVoice);
+
+            String junieConfig =
+                JunieConfigReader.readJunieConfig(project, message -> addLogEntry(LogLevel.DEBUG, message));
+
+            voiceService = new VoiceService(apiKey, selectedModel, selectedVoice, junieConfig);
             voiceService.setServiceListener(this);
 
             // Initialize OpenAI Responses Service for code detection
-            responsesService = new OpenAIResponsesService(apiKey);
+            responsesService = new OpenAIResponsesService(apiKey, junieConfig);
 
             // Initialize OpenAI Files Service for file uploads
             filesService = new OpenAIFilesService(apiKey);

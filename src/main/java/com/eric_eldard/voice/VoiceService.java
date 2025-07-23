@@ -1,5 +1,7 @@
 package com.eric_eldard.voice;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
@@ -12,26 +14,23 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
 {
     private final OpenAIRealtimeService openAIService;
 
+    @Getter
     private final AudioService audioService;
 
+    @Setter
     private VoiceServiceListener serviceListener;
 
     // Audio response state tracking
     private volatile boolean audioResponseActive = false;
 
-    public VoiceService(String openAIApiKey, String model, String voice)
+    public VoiceService(String openAIApiKey, String model, String voice, String junieConfig)
     {
-        this.openAIService = new OpenAIRealtimeService(openAIApiKey, model, voice);
+        this.openAIService = new OpenAIRealtimeService(openAIApiKey, model, voice, junieConfig);
         this.audioService = new AudioService();
 
         // Set up listeners
         this.openAIService.setEventListener(this);
         this.audioService.setAudioDataListener(this);
-    }
-
-    public void setServiceListener(VoiceServiceListener listener)
-    {
-        this.serviceListener = listener;
     }
 
     public CompletableFuture<Boolean> initialize()
@@ -125,17 +124,6 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
     {
         return openAIService.isConnected();
     }
-
-    public AudioService getAudioService()
-    {
-        return audioService;
-    }
-
-    public OpenAIRealtimeService getOpenAIService()
-    {
-        return openAIService;
-    }
-
 
     public void sendTextMessage(String text)
     {

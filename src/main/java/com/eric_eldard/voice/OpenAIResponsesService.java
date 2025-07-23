@@ -31,7 +31,23 @@ public class OpenAIResponsesService
     public static final String LABEL_CODE_REQUEST = "[code-request]";
     public static final String LABEL_NON_GENERATIVE_REQUEST = "[non-generative-request]";
 
-    private static final String INSTRUCTIONS = String.format("""
+    private final String instructions;
+
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
+    private final String apiKey;
+
+    public OpenAIResponsesService(String apiKey, String junieConfig)
+    {
+        this.apiKey = apiKey;
+        this.objectMapper = new ObjectMapper();
+        this.httpClient = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build();
+        this.instructions = junieConfig + String.format("""
+
         You are analyzing a conversation between a user and a voice assistant.
         Your task is to determine if the user's latest request indicates they want:
         1. Code to be produced
@@ -66,20 +82,6 @@ public class OpenAIResponsesService
         - Casual conversation
         - Questions about how something works conceptually
         """, LABEL_CODE_REQUEST, LABEL_PROMPT_REQUEST, LABEL_NON_GENERATIVE_REQUEST);
-
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
-    private final String apiKey;
-
-    public OpenAIResponsesService(String apiKey)
-    {
-        this.apiKey = apiKey;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build();
     }
 
     /**
@@ -194,7 +196,7 @@ public class OpenAIResponsesService
         // Add system message with instructions
         ObjectNode systemMessage = objectMapper.createObjectNode();
         systemMessage.put("role", "system");
-        systemMessage.put("content", INSTRUCTIONS);
+        systemMessage.put("content", instructions);
         messages.add(systemMessage);
 
         // Add transcript messages
