@@ -35,6 +35,10 @@ public class OpenAIRealtimeService
 
     private static final long MIN_BUFFER_DURATION_MS = 100; // Minimum 100ms of audio
 
+    // Calculate minimum buffer size for 100ms of audio
+    private static final long MIN_BUFFER_SIZE_BYTES =
+        (long) ((SAMPLE_RATE * CHANNELS * SAMPLE_SIZE_IN_BITS / 8) * (MIN_BUFFER_DURATION_MS / 1000.0));
+
     private final String instructions;
 
     private final String apiKey;
@@ -48,6 +52,12 @@ public class OpenAIRealtimeService
     private final AtomicBoolean connected = new AtomicBoolean(false);
 
     private final AtomicLong audioBufferSize = new AtomicLong(0); // Track buffer size in bytes
+
+    // Amplitude detection for speech detection
+    private volatile double maxAmplitude = 0.0;
+
+    // Threshold for detecting human speech (2% of max 16-bit value)
+    private static final double SPEECH_AMPLITUDE_THRESHOLD = 0.02;
 
     private volatile long lastApiCallTime = 0; // For rate limiting
 
@@ -86,10 +96,17 @@ public class OpenAIRealtimeService
         this.instructions = junieConfig + """
             
             # General Guidance
-            You are a helpful AI assistant for developers. You are always **brief**, professional, and enthusiastic.
+            You are Junie Voice, an agent which extends of the functionality of Jetbrains' IntelliJ AI coding assistant
+            Junie by adding multi-modal capabilities (voice, text, and image interpretation).
+            Your goal is to help developers create prompts for Jetbrains' Junie to then create code.
+            You may also generate small snippets of code (see note below about not saying the code aloud), but only when
+            the developer's request is simple and does not require context from their project.
+            Developers will refer to you as "Junie Voice" or simply "Junie".
+            You are always **brief**, professional, and enthusiastic.
 
             # Discussing Code
             IMPORTANT: Never speak code aloud - provide _brief_ conceptual explanations only, not code syntax.
+            A separate text agent will handle the actual code generation.
             
             # Creating Prompts
             IMPORTANT: Never speak prompts aloud - when the user wants to build something or create a prompt for another
@@ -269,19 +286,21 @@ public class OpenAIRealtimeService
             return;
         }
 
-        byte[] dataToSend = null;
-
         synchronized (bufferLock)
         {
             // Always accumulate incoming audio data
             try
             {
                 tempAudioBuffer.write(audioData);
+
+                // Calculate and track amplitude for speech detection
+                maxAmplitude = Math.max(maxAmplitude, calculateAmplitude(audioData));
+
                 // Reduce debug logging frequency to improve performance
                 if (tempAudioBuffer.size() % 51200 == 0)
                 { // Log every 50KB accumulated for better performance
-                    log.debug("Accumulated audio data: {} bytes, temp buffer size: {} bytes",
-                        audioData.length, tempAudioBuffer.size());
+                    log.debug("Accumulated audio data: {} bytes, temp buffer size: {} bytes, max amplitude: {}",
+                        audioData.length, tempAudioBuffer.size(), maxAmplitude);
                 }
             }
             catch (IOException e)
@@ -296,7 +315,7 @@ public class OpenAIRealtimeService
 
             if (currentTime - lastApiCallTime < requiredDelay)
             {
-                log.debug("Rate limiting: delaying send ({}ms remaining)",
+                log.debug("Self rate limiting: delaying send ({}ms remaining)",
                     requiredDelay - (currentTime - lastApiCallTime));
                 return;
             }
@@ -304,60 +323,59 @@ public class OpenAIRealtimeService
             // Prepare data for sending (minimize time in synchronized block)
             if (tempAudioBuffer.size() > 0)
             {
-                dataToSend = tempAudioBuffer.toByteArray();
-                tempAudioBuffer.reset(); // Clear the buffer
+                sendVoiceData(tempAudioBuffer.toByteArray());
+                tempAudioBuffer.reset();
                 lastApiCallTime = currentTime;
             }
         }
+    }
 
+    private void sendVoiceData(byte[] dataToSend)
+    {
         // Perform expensive operations outside synchronized block
-        if (dataToSend != null)
+        try
         {
-            try
+            // Encode audio data as base64 (expensive operation)
+            String base64Audio = Base64.getEncoder().encodeToString(dataToSend);
+
+            // Create JSON message (expensive operation)
+            ObjectNode audioMessage = objectMapper.createObjectNode();
+            audioMessage.put("type", "input_audio_buffer.append");
+            audioMessage.put("audio", base64Audio);
+
+            String message = objectMapper.writeValueAsString(audioMessage);
+
+            // Send via WebSocket
+            webSocket.send(message);
+
+            // Track buffer size ONLY after successful send
+            long totalBufferSize = audioBufferSize.addAndGet(dataToSend.length);
+            log.debug("Sent accumulated audio data: {} bytes, total buffer: {} bytes",
+                dataToSend.length, totalBufferSize);
+
+            // Log audio data transmission
+            if (eventListener != null)
             {
-                // Encode audio data as base64 (expensive operation)
-                String base64Audio = Base64.getEncoder().encodeToString(dataToSend);
-
-                // Create JSON message (expensive operation)
-                ObjectNode audioMessage = objectMapper.createObjectNode();
-                audioMessage.put("type", "input_audio_buffer.append");
-                audioMessage.put("audio", base64Audio);
-
-                String message = objectMapper.writeValueAsString(audioMessage);
-
-                // Send via WebSocket
-                webSocket.send(message);
-
-                // Track buffer size ONLY after successful send
-                long totalBufferSize = audioBufferSize.addAndGet(dataToSend.length);
-                log.debug("Sent accumulated audio data: {} bytes, total buffer: {} bytes",
-                    dataToSend.length, totalBufferSize);
-
-                // Log audio data transmission
-                if (eventListener != null)
-                {
-                    eventListener.onTraceMessage(
-                        String.format("Audio Data: Sent %d bytes of audio data (total buffer: %d bytes) [SENT]",
-                            dataToSend.length, totalBufferSize));
-                }
-
-                // Reset backoff on successful send
-                resetBackoff();
+                eventListener.onTraceMessage(
+                    String.format("Audio Data: Sent %d bytes of audio data (total buffer: %d bytes) [SENT]",
+                        dataToSend.length, totalBufferSize));
             }
-            catch (Exception e)
+
+            resetBackoff();
+        }
+        catch (Exception e)
+        {
+            log.error("Failed to send accumulated audio data", e);
+
+            // Log audio data transmission failure
+            if (eventListener != null)
             {
-                log.error("Failed to send accumulated audio data", e);
-
-                // Log audio data transmission failure
-                if (eventListener != null)
-                {
-                    eventListener.onTraceMessage(
-                        "Audio Data: Failed to send audio data: " + e.getMessage() + " [ERROR]");
-                }
-
-                // Increase backoff delay on failure to prevent rapid retries
-                increaseBackoff();
+                eventListener.onTraceMessage(
+                    "Audio Data: Failed to send audio data: " + e.getMessage() + " [ERROR]");
             }
+
+            // Increase backoff delay on failure to prevent rapid retries
+            increaseBackoff();
         }
     }
 
@@ -477,11 +495,6 @@ public class OpenAIRealtimeService
 
     public void commitAudioBuffer()
     {
-        commitAudioBuffer(false);
-    }
-
-    public void commitAudioBuffer(boolean forceCommit)
-    {
         if (!isConnected())
         {
             log.warn("Cannot commit audio buffer - not connected");
@@ -495,18 +508,17 @@ public class OpenAIRealtimeService
 
         if (timeSinceLastTranscription < requiredTranscriptionDelay)
         {
-            log.warn("Transcription rate limiting: skipping commit ({}ms since last, {}ms required)",
+            log.warn("Self transcription rate limiting: skipping commit ({}ms since last, {}ms required)",
                 timeSinceLastTranscription, requiredTranscriptionDelay);
 
-            // Log rate limiting
             if (eventListener != null)
             {
                 eventListener.onRequestLog("Buffer Commit",
-                    String.format("Rate limited: need to wait %dms before next commit",
+                    String.format("Self rate limited: need to wait %dms before next commit",
                         requiredTranscriptionDelay - timeSinceLastTranscription),
                     "RATE_LIMITED");
                 eventListener.onError(new RuntimeException(
-                    String.format("Transcription rate limited. Please wait %dms before next commit.",
+                    String.format("Self transcription rate limited. Please wait %dms before next commit.",
                         requiredTranscriptionDelay - timeSinceLastTranscription)));
             }
             return;
@@ -514,9 +526,8 @@ public class OpenAIRealtimeService
 
         // Check if we have enough audio data (minimum 100ms) - skip check if forced
         long currentBufferSize = audioBufferSize.get();
-        long minBufferSizeBytes = calculateMinBufferSizeBytes();
 
-        if (!forceCommit && currentBufferSize < minBufferSizeBytes)
+        if (currentBufferSize < MIN_BUFFER_SIZE_BYTES)
         {
             double durationMs = calculateBufferDurationMs(currentBufferSize);
             log.warn("Audio buffer too small: {}ms (minimum {}ms required). Skipping commit.",
@@ -531,13 +542,6 @@ public class OpenAIRealtimeService
                     String.format("Audio buffer too small: %.2fms (minimum %dms required)",
                         durationMs, MIN_BUFFER_DURATION_MS)));
             }
-            return;
-        }
-
-        // Final safety check - never commit if buffer size is zero
-        if (currentBufferSize == 0)
-        {
-            log.warn("Skipping commit - buffer size is zero (forceCommit: {})", forceCommit);
             return;
         }
 
@@ -636,17 +640,9 @@ public class OpenAIRealtimeService
         }
     }
 
-    private long calculateMinBufferSizeBytes()
-    {
-        // Calculate minimum buffer size for 100ms of audio
-        // Formula: (sample_rate * channels * bits_per_sample / 8) * (duration_ms / 1000)
-        return (long) ((SAMPLE_RATE * CHANNELS * SAMPLE_SIZE_IN_BITS / 8) * (MIN_BUFFER_DURATION_MS / 1000.0));
-    }
-
     private double calculateBufferDurationMs(long bufferSizeBytes)
     {
         // Calculate duration in milliseconds from buffer size
-        // Formula: (buffer_size_bytes * 8 * 1000) / (sample_rate * channels * bits_per_sample)
         return (bufferSizeBytes * 8.0 * 1000.0) / (SAMPLE_RATE * CHANNELS * SAMPLE_SIZE_IN_BITS);
     }
 
@@ -656,49 +652,9 @@ public class OpenAIRealtimeService
         {
             audioBufferSize.set(0);
             tempAudioBuffer.reset();
+            maxAmplitude = 0.0;
             log.debug("Audio buffer cleared");
         }
-    }
-
-    public void flushAudioBuffer()
-    {
-        synchronized (bufferLock)
-        {
-            if (tempAudioBuffer.size() > 0)
-            {
-                try
-                {
-                    byte[] remainingData = tempAudioBuffer.toByteArray();
-                    tempAudioBuffer.reset();
-
-                    // Encode and send remaining audio data
-                    String base64Audio = Base64.getEncoder().encodeToString(remainingData);
-
-                    ObjectNode audioMessage = objectMapper.createObjectNode();
-                    audioMessage.put("type", "input_audio_buffer.append");
-                    audioMessage.put("audio", base64Audio);
-
-                    String message = objectMapper.writeValueAsString(audioMessage);
-                    webSocket.send(message);
-
-                    // Track buffer size ONLY after successful send
-                    long totalBufferSize = audioBufferSize.addAndGet(remainingData.length);
-                    log.info("Flushed remaining audio data: {} bytes, total buffer: {} bytes",
-                        remainingData.length, totalBufferSize);
-                }
-                catch (Exception e)
-                {
-                    log.error("Failed to flush remaining audio data", e);
-                    // Increase backoff delay on failure
-                    increaseBackoff();
-                }
-            }
-        }
-    }
-
-    public long getAudioBufferSize()
-    {
-        return audioBufferSize.get();
     }
 
     public double getAudioBufferDurationMs()
@@ -708,9 +664,57 @@ public class OpenAIRealtimeService
 
     public boolean hasMinimumAudioData()
     {
-        long currentBufferSize = audioBufferSize.get();
-        long minBufferSizeBytes = calculateMinBufferSizeBytes();
-        return currentBufferSize >= minBufferSizeBytes;
+        return audioBufferSize.get() >= MIN_BUFFER_SIZE_BYTES;
+    }
+
+    /**
+     * Calculate the amplitude (volume level) of audio data
+     *
+     * @param audioData 16-bit PCM audio data
+     * @return amplitude as a value between 0.0 and 1.0
+     */
+    private double calculateAmplitude(byte[] audioData)
+    {
+        if (audioData == null || audioData.length < 2)
+        {
+            return 0.0;
+        }
+
+        double sum = 0.0;
+        int sampleCount = audioData.length / 2; // 16-bit samples = 2 bytes per sample
+
+        // Convert bytes to 16-bit samples and calculate RMS amplitude
+        for (int i = 0; i < audioData.length - 1; i += 2)
+        {
+            // Convert little-endian 16-bit sample to int
+            int sample = (audioData[i] & 0xFF) | ((audioData[i + 1] & 0xFF) << 8);
+
+            // Convert unsigned to signed 16-bit
+            if (sample > 32767)
+            {
+                sample -= 65536;
+            }
+
+            // Normalize to -1.0 to 1.0 range and square for RMS
+            double normalizedSample = sample / 32768.0;
+            sum += normalizedSample * normalizedSample;
+        }
+
+        // Calculate RMS amplitude
+        return Math.sqrt(sum / sampleCount);
+    }
+
+    /**
+     * Check if the recorded audio contains speech based on amplitude analysis
+     *
+     * @return true if amplitude indicates human speech was detected
+     */
+    public boolean hasSpeechAmplitude()
+    {
+        boolean hasSpeech = maxAmplitude >= SPEECH_AMPLITUDE_THRESHOLD;
+        log.debug("Speech amplitude check: max amplitude = {}, threshold = {}, has speech = {}",
+            maxAmplitude, SPEECH_AMPLITUDE_THRESHOLD, hasSpeech);
+        return hasSpeech;
     }
 
     private void resetBackoff()
@@ -967,25 +971,7 @@ public class OpenAIRealtimeService
 
         log.error("OpenAI API error: {} (code: {})", errorMessage, errorCode);
 
-        // Handle specific error types
-        if (errorMessage.contains("429") || errorMessage.contains("Too Many Requests"))
-        {
-            log.warn("Rate limit exceeded. Implementing exponential backoff.");
-            increaseBackoff();
-
-            // Only reset buffer if we have too many consecutive errors to prevent data loss
-            if (consecutiveErrors > 3)
-            {
-                log.warn("Too many consecutive rate limit errors ({}), clearing buffer to recover",
-                    consecutiveErrors);
-                audioBufferSize.set(0);
-            }
-        }
-        else
-        {
-            // For non-rate-limit errors, reset backoff
-            resetBackoff();
-        }
+        resetBackoffUnlessTooManyRequests(errorMessage);
 
         if (eventListener != null)
         {
@@ -1009,29 +995,31 @@ public class OpenAIRealtimeService
 
         log.error("Audio transcription failed for item '{}': {}", itemId, errorMessage);
 
-        // Handle specific transcription errors
+        resetBackoffUnlessTooManyRequests(errorMessage);
+
+        if (eventListener != null)
+        {
+            eventListener.onError(new RuntimeException("Audio transcription failed: " + errorMessage));
+        }
+    }
+
+    private void resetBackoffUnlessTooManyRequests(String errorMessage)
+    {
         if (errorMessage.contains("429") || errorMessage.contains("Too Many Requests"))
         {
-            log.warn("Transcription rate limit exceeded. Implementing exponential backoff.");
+            log.warn("Rate limit exceeded. Implementing exponential backoff.");
             increaseBackoff();
 
             // Only reset buffer if we have too many consecutive errors to prevent data loss
             if (consecutiveErrors > 3)
             {
-                log.warn("Too many consecutive transcription rate limit errors ({}), clearing buffer to recover",
-                    consecutiveErrors);
-                audioBufferSize.set(0);
+                log.warn("Too many consecutive rate limit errors ({}), clearing buffer to recover", consecutiveErrors);
+                clearAudioBuffer();
             }
         }
         else
         {
-            // For non-rate-limit transcription errors, reset backoff
             resetBackoff();
-        }
-
-        if (eventListener != null)
-        {
-            eventListener.onError(new RuntimeException("Audio transcription failed: " + errorMessage));
         }
     }
 

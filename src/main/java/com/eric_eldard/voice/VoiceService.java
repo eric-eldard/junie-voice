@@ -84,11 +84,13 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
         // Check buffer size before committing using improved validation
         double bufferDurationMs = openAIService.getAudioBufferDurationMs();
         boolean hasMinimumData = openAIService.hasMinimumAudioData();
+        boolean hasSpeechAmplitude = openAIService.hasSpeechAmplitude();
 
-        log.info("Stopping voice session. Audio buffer: {}ms, has minimum data: {}", bufferDurationMs, hasMinimumData);
+        log.info("Stopping voice session. Audio buffer: {}ms, has minimum data: {}, has speech amplitude: {}",
+            bufferDurationMs, hasMinimumData, hasSpeechAmplitude);
 
-        // Only commit if we have sufficient audio data (minimum 100ms)
-        if (hasMinimumData && bufferDurationMs >= 100.0)
+        // Only commit if we have sufficient audio data (minimum 100ms) AND amplitude indicates human speech
+        if (hasMinimumData && bufferDurationMs >= 100.0 && hasSpeechAmplitude)
         {
             // Commit the audio buffer to OpenAI for processing
             openAIService.commitAudioBuffer();
@@ -96,16 +98,23 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
         }
         else
         {
-            log.debug("Skipping audio buffer commit - insufficient audio data ({}ms, minimum check: {})",
-                bufferDurationMs, hasMinimumData);
-            // Clear the buffer since we're not using it
-            openAIService.clearAudioBuffer();
+            log.debug("Skipping audio buffer commit - insufficient audio data ({}ms, minimum check: {}, speech amplitude: {})",
+                bufferDurationMs, hasMinimumData, hasSpeechAmplitude);
 
-            // Log the short recording at debug level instead of treating it as an error
-            log.debug(
-                "Recording too short ({}ms). Please record for at least 100ms and ensure microphone is working.",
-                bufferDurationMs);
+            // Log the reason for skipping at debug level
+            if (!hasSpeechAmplitude)
+            {
+                log.debug("Recording discarded - no speech detected (amplitude too low). This prevents responding to silence when mic is toggled off.");
+            }
+            else
+            {
+                log.debug("Recording too short ({}ms). Please record for at least 100ms and ensure microphone is working.", bufferDurationMs);
+            }
         }
+
+        // Clear the buffer since we're done using it, regardless of whether we committed
+        // If we don't do this, chunks of audio get sent when the mic is turned back on, causing the agent to respond
+        openAIService.clearAudioBuffer();
 
         log.info("Voice session stopped");
 
@@ -232,12 +241,6 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
     {
         // Always send audio data to OpenAI when available - this enables interruption
         // The AudioService will only call this when microphone is actively recording
-
-        // Send audio data to OpenAI with reduced logging frequency for performance
-        if (audioData.length > 0 && audioData.length % 51200 == 0)
-        { // Log every ~50KB for better performance
-            log.debug("Received audio data from microphone: {} bytes", audioData.length);
-        }
         openAIService.sendAudioData(audioData);
     }
 
@@ -246,14 +249,12 @@ public class VoiceService implements OpenAIRealtimeService.VoiceEventListener, A
     public void onSpeechStarted()
     {
         log.info("Speech started detected by OpenAI");
-        // Could add UI feedback here
     }
 
     @Override
     public void onSpeechStopped()
     {
         log.info("Speech stopped detected by OpenAI");
-        // Could add UI feedback here
     }
 
     @Override
