@@ -6,14 +6,9 @@ import org.commonmark.node.Node;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 
-import javax.swing.BorderFactory;
-import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
-import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.Desktop;
-import java.awt.Insets;
 import java.util.List;
 
 import com.eric_eldard.VoiceAssistantPanel;
@@ -25,33 +20,12 @@ import com.eric_eldard.ui.renderer.UnwrapParagraphRenderer;
 @Slf4j
 public class HtmlLogPanel extends BaseLogPanel
 {
-    private final JTextPane editorPane;
-
     public HtmlLogPanel(LogEntry logEntry, boolean visible)
     {
-        super(logEntry, visible);
-
-        // Use JTextPane with HTML for transcript messages
-        editorPane = new JTextPane()
-        {
-            @Override
-            public boolean getScrollableTracksViewportWidth()
-            {
-                return true;
-            }
-        };
-        editorPane.setContentType("text/html");
-        editorPane.setEditable(false);
-        editorPane.setOpaque(false);
-        editorPane.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        editorPane.setMargin(new Insets(0, 0, 0, 0));
-
-        // Set alignment for the editor pane to ensure top alignment
-        editorPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        editorPane.setAlignmentY(Component.TOP_ALIGNMENT);
+        super(logEntry, visible, true);
 
         // Add hyperlink listener for transcript messages
-        editorPane.addHyperlinkListener(e ->
+        textPane().addHyperlinkListener(e ->
         {
             if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED)
             {
@@ -65,14 +39,11 @@ public class HtmlLogPanel extends BaseLogPanel
                 }
             }
         });
-
-        add(editorPane, BorderLayout.CENTER);
-        updateContent();
     }
 
     public void updateContent()
     {
-        updateContent(logEntry.message());
+        updateContent(logEntry().message());
     }
 
     public void updateContent(String message)
@@ -81,7 +52,7 @@ public class HtmlLogPanel extends BaseLogPanel
         {
             String html = """
                 <html>
-                    <body style='font-family: monospace; font-size: 9px; margin: 0; padding: 0;
+                    <body style='font-family: sans-serif; font-size: 10px; margin: 0; padding: 0;
                     word-wrap: break-word; white-space: pre-wrap; overflow-wrap: break-word;
                     text-align: left; vertical-align: top; line-height: 1.2; width: 100%;
                     max-width: 100%; box-sizing: border-box; color: #ffffff;'>
@@ -91,7 +62,7 @@ public class HtmlLogPanel extends BaseLogPanel
                     </body>
                 </html>
                 """;
-            editorPane.setText(html);
+            textPane().setText(html);
         });
     }
 
@@ -105,23 +76,8 @@ public class HtmlLogPanel extends BaseLogPanel
         try
         {
             // Extract prefix and content from messages that already have emoji prefixes
-            String prefix;
-            String content;
-
-            if (markdown.startsWith(VoiceAssistantPanel.USER_PREFIX))
-            {
-                prefix = VoiceAssistantPanel.USER_PREFIX;
-                content = markdown.substring(VoiceAssistantPanel.USER_PREFIX.length());
-            }
-            else if (markdown.startsWith(VoiceAssistantPanel.AGENT_PREFIX))
-            {
-                prefix = VoiceAssistantPanel.AGENT_PREFIX;
-                content = markdown.substring(VoiceAssistantPanel.AGENT_PREFIX.length());
-            }
-            else
-            {
-                throw new IllegalArgumentException("Well then who is this from? [" + markdown + ']');
-            }
+            String prefix = markdown.substring(0, VoiceAssistantPanel.PREFIX_CHARS);
+            String content = markdown.substring(VoiceAssistantPanel.PREFIX_CHARS);
 
             // Create parser with extensions with tables
             Parser parser = Parser.builder()
