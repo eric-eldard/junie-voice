@@ -61,7 +61,7 @@ public class JunieConfigReader
                         }
                         if (appLogger != null)
                         {
-                            appLogger.accept("Configuration read from file .junie/" + file.getFileName());
+                            appLogger.accept("Configuration read from project file .junie/" + file.getFileName());
                         }
                     }
                     catch (IOException e)
