@@ -1432,7 +1432,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         String debugMsg = String.format("[%s] ERROR: %s", timestamp, error.getMessage());
         addLogEntry(LogLevel.DEBUG, debugMsg);
 
-        String infoMsg = "❌ " + error.getMessage();
+        String infoMsg = "❌ " + (error.getMessage() == null ? "Unknown error" : error.getMessage());
         addLogEntry(LogLevel.INFO, infoMsg);
     }
 
