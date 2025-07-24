@@ -1428,10 +1428,12 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     {
         SwingUtilities.invokeLater(() -> log.error("Voice service error", error));
 
-        // Format the error log with timestamp
         String timestamp = getTimestamp();
-        String logMessage = String.format("[%s] ❌ Error: %s", timestamp, error.getMessage());
-        addLogEntry(LogLevel.INFO, logMessage);
+        String debugMsg = String.format("[%s] ERROR: %s", timestamp, error.getMessage());
+        addLogEntry(LogLevel.DEBUG, debugMsg);
+
+        String infoMsg = "❌ Error: " + error.getMessage();
+        addLogEntry(LogLevel.INFO, infoMsg);
     }
 
     private static @NotNull String getTimestamp()
