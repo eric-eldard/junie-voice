@@ -24,4 +24,5 @@ with it. And don't judge the code quality...there are a couple of vibed files I'
 2. Fix "code blocks not block-level elements"
 3. Fix "mic button sometimes becomes permanently disabled"
 4. Clean up log messages
-5. Allow interruption _w/o push-to-interrupt_ (echo cancellation)
+5. Add "agent can be interrupted _w/o push-to-interrupt_" (echo cancellation)
+6. Add "API key can be remembered between sessions"
