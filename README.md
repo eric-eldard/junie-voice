@@ -1,4 +1,6 @@
-# About
+# Junie Voice
+
+## About
 I've frequently used ChatGPT voice mode as a sounding board—but it doesn't have access to my code base, so the best I
 can do is copy-paste snippets in and out of it. I use JetBrain's Claude 4-backed Junie as my coding agent of choice—
 Claude 4 is, IMHO, the best model for coding tasks, and Junie lives where I live: in IntelliJ. But without voice
@@ -14,12 +16,12 @@ Junie Voice is a hobby project and proof of concept, while the IntelliJ userbase
 together to give Junie first-class voice capability. Fork if you like; I'd love a push back if you do anything cool
 with it. And don't judge the code quality...there are a couple of vibed files I've never even opened 😅
 
-# Build
+## Build
 ```
 ./gradlew buildPlugin
 ```
 
-# TODO
+## TODO
 1. Stop sending audio when it's below human speech amplitude
 2. Fix "code blocks not block-level elements"
 3. Fix "mic button sometimes becomes permanently disabled"
