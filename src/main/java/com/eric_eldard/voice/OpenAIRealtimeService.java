@@ -246,7 +246,6 @@ public class OpenAIRealtimeService
             session.put("turn_detection", turnDetection);
 
             session.set("tools", objectMapper.createArrayNode());
-            session.put("temperature", 0.8);
             session.put("max_response_output_tokens", 4096);
 
             sessionUpdate.set("session", session);

@@ -66,6 +66,7 @@ import com.eric_eldard.ui.log.HtmlLogPanel;
 import com.eric_eldard.ui.log.LogEntry;
 import com.eric_eldard.ui.log.LogLevel;
 import com.eric_eldard.ui.log.TextLogPanel;
+import com.eric_eldard.util.EnvUtils;
 import com.eric_eldard.util.JunieConfigReader;
 import com.eric_eldard.voice.OpenAIFilesService;
 import com.eric_eldard.voice.OpenAIResponsesService;
@@ -85,6 +86,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
     public static final String FILE_UPLOAD  = "\uD83D\uDCC2️ ";
     public static final String IMAGE_INPUT  = "\uD83D\uDCCB ";
     public static final int PREFIX_CHARS = (USER_PREFIX + CHAT_BUBBLE).length();
+    private static final String[] VOICE_MODELS =
+        EnvUtils.getProperty("openai.voice.models", "OPENAI_VOICE_MODELS", "gpt-realtime-mini,gpt-realtime-1.5").split(",");
 
     private JBPanel mainPanel;
 
@@ -200,8 +203,8 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         // Right side with Model and Voice selection dropdowns
         JBPanel rightModelPanel = new JBPanel(new FlowLayout(FlowLayout.RIGHT));
         JLabel modelLabel = new JLabel("Model:");
-        modelComboBox = new JComboBox<>(new String[]{"gpt-4o-mini-realtime-preview", "gpt-4o-realtime-preview"});
-        modelComboBox.setSelectedItem("gpt-4o-mini-realtime-preview");
+        modelComboBox = new JComboBox<>(VOICE_MODELS);
+        modelComboBox.setSelectedItem(VOICE_MODELS[0]);
         modelComboBox.setPreferredSize(new Dimension(230, 25));
 
         JLabel voiceLabel = new JLabel("Voice:");

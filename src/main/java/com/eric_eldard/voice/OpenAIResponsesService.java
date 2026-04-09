@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import com.eric_eldard.util.EnvUtils;
+
 /**
  * Service for calling OpenAI's Chat Completions API to determine if user requests require code responses
  */
@@ -23,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 public class OpenAIResponsesService
 {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-    private static final String MODEL = "gpt-4.1-mini";
+    private static final String MODEL = EnvUtils.getProperty("openai.chat.model", "OPENAI_CHAT_MODEL", "gpt-5.3-chat-latest");
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     // LLM response label constants
@@ -187,9 +189,7 @@ public class OpenAIResponsesService
     {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", MODEL);
-        requestBody.put("max_tokens", 1000);
-        requestBody.put("temperature", 0.1);
-
+        requestBody.put("max_completion_tokens", 1000);
 
         ArrayNode messages = objectMapper.createArrayNode();
 

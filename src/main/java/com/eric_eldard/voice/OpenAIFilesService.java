@@ -18,14 +18,16 @@ import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import com.eric_eldard.util.EnvUtils;
+
 /**
- * Service for analyzing images using OpenAI's Chat Completions API with gpt-4.1-mini
+ * Service for analyzing images using OpenAI's Chat Completions API
  */
 @Slf4j
 public class OpenAIFilesService
 {
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-    private static final String MODEL = "gpt-4.1-mini";
+    private static final String MODEL = EnvUtils.getProperty("openai.chat.model", "OPENAI_CHAT_MODEL", "gpt-5.3-chat-latest");
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient httpClient;
@@ -166,8 +168,7 @@ public class OpenAIFilesService
     {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", MODEL);
-        requestBody.put("max_tokens", 1000);
-        requestBody.put("temperature", 0.1);
+        requestBody.put("max_completion_tokens", 1000);
 
         ArrayNode messages = objectMapper.createArrayNode();
 

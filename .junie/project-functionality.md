@@ -107,7 +107,7 @@ The plugin has four sections
     - Allows users to upload image files for AI analysis
     - Only accepts image files (jpg, jpeg, png, gif, bmp, webp)
     - File dialog remembers the last accessed directory for convenience
-    - Selected images are analyzed using OpenAI's gpt-4.1-mini model with vision capabilities
+    - Selected images are analyzed using by the LLM specified by `openai.chat.model`
     - AI provides detailed descriptions of image content
     - Image analysis responses are displayed as agent messages (not spoken aloud)
     - Responses are injected into the voice session using `conversation.item.create` for proper context
