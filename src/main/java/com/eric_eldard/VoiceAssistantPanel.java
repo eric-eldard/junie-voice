@@ -205,7 +205,7 @@ public class VoiceAssistantPanel implements VoiceService.VoiceServiceListener
         JLabel modelLabel = new JLabel("Model:");
         modelComboBox = new JComboBox<>(VOICE_MODELS);
         modelComboBox.setSelectedItem(VOICE_MODELS[0]);
-        modelComboBox.setPreferredSize(new Dimension(230, 25));
+        modelComboBox.setPreferredSize(new Dimension(155, 25));
 
         JLabel voiceLabel = new JLabel("Voice:");
         voiceComboBox = new JComboBox<>(new String[]{
